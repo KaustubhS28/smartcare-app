@@ -8,6 +8,9 @@ import Appointments from '../views/Appointments.vue'
 import MedicalRecords from '../views/MedicalRecords.vue'
 import HealthTracking from '../views/HealthTracking.vue'
 import Medications from '../views/Medications.vue'
+import Billing from '../views/Billing.vue'
+import PaymentMethods from '../views/PaymentMethods.vue'
+import Settings from '../views/Settings.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -83,6 +86,33 @@ const router = createRouter({
       meta: { 
         requiresAuth: true,
         title: 'Medications - SmartCare'
+      }
+    },
+    {
+      path: '/billing',
+      name: 'billing',
+      component: Billing,
+      meta: { 
+        requiresAuth: true,
+        title: 'Billing & Payments - SmartCare'
+      }
+    },
+    {
+      path: '/payment-methods',
+      name: 'payment-methods',
+      component: PaymentMethods,
+      meta: { 
+        requiresAuth: true,
+        title: 'Payment Methods - SmartCare'
+      }
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: Settings,
+      meta: { 
+        requiresAuth: true,
+        title: 'Settings - SmartCare'
       }
     },
     // Redirect old route names for backward compatibility

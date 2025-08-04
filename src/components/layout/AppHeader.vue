@@ -1,19 +1,30 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useNotificationStore } from '../../stores/notifications'
+import NotificationList from '../notifications/NotificationList.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const notificationStore = useNotificationStore()
 
 const showProfileMenu = ref(false)
+const showNotifications = ref(false)
 
 const toggleProfileMenu = () => {
   showProfileMenu.value = !showProfileMenu.value
+  showNotifications.value = false
 }
 
-const closeDropdown = () => {
+const toggleNotifications = () => {
+  showNotifications.value = !showNotifications.value
   showProfileMenu.value = false
+}
+
+const closeDropdowns = () => {
+  showProfileMenu.value = false
+  showNotifications.value = false
 }
 
 const handleLogout = () => {
@@ -33,11 +44,32 @@ const handleLogout = () => {
   }
 }
 
-// Close dropdown when clicking outside
+const handleNotificationMarkAsRead = async (notificationId) => {
+  await notificationStore.markAsRead(notificationId)
+}
+
+const handleNotificationDelete = async (notificationId) => {
+  await notificationStore.deleteNotification(notificationId)
+}
+
+const handleMarkAllAsRead = async () => {
+  await notificationStore.markAllAsRead()
+}
+
+const handleViewAllNotifications = () => {
+  showNotifications.value = false
+  router.push({ name: 'settings' })
+}
+
+// Close dropdowns when clicking outside
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.user-profile')) {
-    showProfileMenu.value = false
+  if (!e.target.closest('.user-profile') && !e.target.closest('.notifications')) {
+    closeDropdowns()
   }
+})
+
+onMounted(() => {
+  notificationStore.fetchNotifications()
 })
 </script>
 
@@ -68,13 +100,44 @@ document.addEventListener('click', (e) => {
         </div>
 
         <div class="notifications">
-          <button class="notification-btn">
+          <button @click="toggleNotifications" class="notification-btn" :class="{ active: showNotifications }">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="2"/>
               <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="2"/>
             </svg>
-            <span class="notification-badge">3</span>
+            <span v-if="notificationStore.unreadCount > 0" class="notification-badge">
+              {{ notificationStore.unreadCount }}
+            </span>
           </button>
+
+          <!-- Notifications Dropdown -->
+          <div v-if="showNotifications" class="notifications-dropdown">
+            <div class="dropdown-header">
+              <h3>Notifications</h3>
+              <div class="dropdown-actions">
+                <button
+                  v-if="notificationStore.unreadCount > 0"
+                  @click="handleMarkAllAsRead"
+                  class="mark-all-btn"
+                >
+                  Mark all as read
+                </button>
+                <button @click="handleViewAllNotifications" class="view-all-btn">
+                  View all
+                </button>
+              </div>
+            </div>
+            
+            <NotificationList
+              :notifications="notificationStore.recentNotifications"
+              :is-loading="notificationStore.isLoading"
+              :show-header="false"
+              :max-items="5"
+              @mark-as-read="handleNotificationMarkAsRead"
+              @delete-notification="handleNotificationDelete"
+              @view-more="handleViewAllNotifications"
+            />
+          </div>
         </div>
 
         <div class="user-profile" @click="toggleProfileMenu">
@@ -244,7 +307,8 @@ document.addEventListener('click', (e) => {
   position: relative;
 }
 
-.notification-btn:hover {
+.notification-btn:hover,
+.notification-btn.active {
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -404,5 +468,69 @@ document.addEventListener('click', (e) => {
     min-width: 250px;
     right: -1rem;
   }
+  
+  .notifications-dropdown {
+    min-width: 320px;
+    right: -1rem;
+  }
+  
+  .dropdown-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-end;
+  }
+}
+
+/* Notifications Dropdown */
+.notifications-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  min-width: 400px;
+  max-width: 500px;
+  z-index: 1000;
+  margin-top: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.notifications-dropdown .dropdown-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notifications-dropdown .dropdown-header h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.dropdown-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.mark-all-btn,
+.view-all-btn {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.mark-all-btn:hover,
+.view-all-btn:hover {
+  color: #2563eb;
 }
 </style> 
