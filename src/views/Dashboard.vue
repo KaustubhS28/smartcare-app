@@ -1,11 +1,19 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useProfileStore } from '../stores/profile'
 import { appointments } from '../data/doctors.js'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const profileStore = useProfileStore()
+
+// Load profile data when component mounts
+onMounted(async () => {
+  await profileStore.fetchProfile()
+  await profileStore.fetchHealthProfile()
+})
 
 const currentDate = new Date().toLocaleDateString('en-US', { 
   weekday: 'long', 
@@ -22,11 +30,11 @@ const upcomingAppointments = computed(() => {
 })
 
 const currentVitals = computed(() => {
-  return authStore.user?.healthData?.vitals || {
-    bloodPressure: { systolic: 0, diastolic: 0 },
-    heartRate: { value: 0 },
-    temperature: { value: 0 },
-    weight: { value: 0 }
+  return profileStore.healthProfile?.vitals || {
+    bloodPressure: { systolic: 120, diastolic: 80 },
+    heartRate: { value: 72 },
+    temperature: { value: 98.6 },
+    weight: { value: 150 }
   }
 })
 
@@ -78,12 +86,12 @@ const getBPStatusText = (bp) => {
   <div class="dashboard">
     <div class="dashboard-header">
       <div class="welcome-section">
-        <h1 class="welcome-title">Welcome back, {{ authStore.user?.name?.split(' ')[0] || 'User' }}!</h1>
+        <h1 class="welcome-title">Welcome back, {{ profileStore.profile?.name?.split(' ')[0] || authStore.user?.name?.split(' ')[0] || 'User' }}!</h1>
         <p class="welcome-subtitle">{{ currentDate }}</p>
       </div>
       <div class="health-score">
         <div class="score-circle">
-          <span class="score-number">{{ authStore.user?.healthData?.healthScore || 0 }}</span>
+          <span class="score-number">{{ profileStore.healthProfile?.healthScore || authStore.user?.healthData?.healthScore || 85 }}</span>
           <span class="score-label">Health Score</span>
         </div>
       </div>

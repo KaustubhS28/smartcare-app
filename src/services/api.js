@@ -1,5 +1,5 @@
 // API Base Configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
 
 // API client with common configuration
 class ApiClient {
@@ -22,9 +22,9 @@ class ApiClient {
     const authData = localStorage.getItem('smartcare_auth')
     if (authData) {
       try {
-        const { token } = JSON.parse(authData)
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
+        const { accessToken, tokenType } = JSON.parse(authData)
+        if (accessToken && tokenType) {
+          config.headers.Authorization = `${tokenType} ${accessToken}`
         }
       } catch (error) {
         console.warn('Failed to parse auth data:', error)
@@ -73,6 +73,116 @@ class ApiClient {
 
 // Create API client instance
 const apiClient = new ApiClient()
+
+// Authentication API endpoints
+export const authApi = {
+  // Authentication
+  signin: (credentials) => apiClient.post('/auth/signin', credentials),
+  
+  signup: (userData) => apiClient.post('/auth/signup', userData),
+  
+  checkUsername: (username) => apiClient.get(`/auth/check-username?username=${username}`),
+  
+  checkEmail: (email) => apiClient.get(`/auth/check-email?email=${email}`),
+  
+  // Profile management
+  getProfile: () => apiClient.get('/profile'),
+  
+  updateProfile: (profileData) => apiClient.put('/profile', profileData),
+  
+  getHealthProfile: () => apiClient.get('/profile/health'),
+  
+  createHealthProfile: (healthData) => apiClient.post('/profile/health', healthData),
+  
+  updateHealthProfile: (healthData) => apiClient.put('/profile/health', healthData),
+  
+  completeTour: () => apiClient.post('/profile/complete-tour')
+}
+
+// Doctor API endpoints
+export const doctorApi = {
+  // Doctor discovery
+  searchDoctors: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString()
+    return apiClient.get(`/doctors/search${queryParams ? `?${queryParams}` : ''}`)
+  },
+  
+  getDoctor: (doctorId) => apiClient.get(`/doctors/${doctorId}`),
+  
+  getDoctorsBySpecialization: (specialization) => 
+    apiClient.get(`/doctors/by-specialization?specialization=${specialization}`),
+  
+  getDoctorAvailability: (doctorId, date) =>
+    apiClient.get(`/doctors/${doctorId}/availability?date=${date}`)
+}
+
+// Appointment API endpoints
+export const appointmentApi = {
+  // Appointment management
+  bookAppointment: (appointmentData) => apiClient.post('/appointments/book', appointmentData),
+  
+  getMyAppointments: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString()
+    return apiClient.get(`/appointments/my-appointments${queryParams ? `?${queryParams}` : ''}`)
+  },
+  
+  getUpcomingAppointments: () => apiClient.get('/appointments/upcoming'),
+  
+  getAvailableSlots: (doctorId, date) => 
+    apiClient.get(`/appointments/available-slots?doctorId=${doctorId}&date=${date}`),
+  
+  updateAppointmentStatus: (appointmentId, status) =>
+    apiClient.put(`/appointments/${appointmentId}/status`, { status }),
+  
+  cancelAppointment: (appointmentId) => 
+    apiClient.put(`/appointments/${appointmentId}/status`, { status: 'CANCELLED' }),
+  
+  rescheduleAppointment: (appointmentId, newDateTime) =>
+    apiClient.put(`/appointments/${appointmentId}/reschedule`, { newDateTime })
+}
+
+// Medication API endpoints  
+export const medicationApi = {
+  // Medication management
+  getMedications: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString()
+    return apiClient.get(`/medications${queryParams ? `?${queryParams}` : ''}`)
+  },
+  
+  getActiveMedications: () => apiClient.get('/medications/active'),
+  
+  addMedication: (medicationData) => apiClient.post('/medications', medicationData),
+  
+  updateMedicationStatus: (medicationId, status) =>
+    apiClient.put(`/medications/${medicationId}/status`, { status }),
+  
+  getMedicationsNeedingRefill: () => apiClient.get('/medications/refill-needed'),
+  
+  deleteMedication: (medicationId) => apiClient.delete(`/medications/${medicationId}`)
+}
+
+// Health Tracking API endpoints
+export const healthTrackingApi = {
+  // Health data management
+  getHealthData: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString()
+    return apiClient.get(`/health-data${queryParams ? `?${queryParams}` : ''}`)
+  },
+  
+  addHealthData: (healthData) => apiClient.post('/health-data', healthData),
+  
+  updateHealthData: (dataId, healthData) =>
+    apiClient.put(`/health-data/${dataId}`, healthData),
+  
+  deleteHealthData: (dataId) => apiClient.delete(`/health-data/${dataId}`),
+  
+  getVitalSigns: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString()
+    return apiClient.get(`/health-data/vitals${queryParams ? `?${queryParams}` : ''}`)
+  },
+  
+  addVitalSigns: (vitalsData) => apiClient.post('/health-data/vitals', vitalsData)
+}
 
 // Payment API endpoints
 export const paymentApi = {
@@ -284,4 +394,4 @@ export const withLoading = async (apiCall, loadingRef) => {
 }
 
 // Export default API client
-export default apiClient 
+export default apiClient

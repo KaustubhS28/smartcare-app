@@ -13,20 +13,150 @@
         <BrandSection />
       </div>
 
-      <!-- Centered Login Form -->
-      <div class="login-form-container">
-        <LoginForm
-          ref="loginFormRef"
-          :error-message="loginError"
-          :is-loading="isLoading"
-          @submit="handleLogin"
-          @update:email="email = $event"
-          @update:password="password = $event"
-        />
+      <!-- Centered Auth Form -->
+      <div class="auth-form-container">
+        <!-- Mode Toggle -->
+        <div class="auth-mode-toggle">
+          <button 
+            :class="{ active: isLoginMode }"
+            @click="setMode('login')"
+            class="mode-toggle-btn"
+          >
+            Login
+          </button>
+          <button 
+            :class="{ active: !isLoginMode }"
+            @click="setMode('signup')"
+            class="mode-toggle-btn"
+          >
+            Sign Up
+          </button>
+        </div>
+
+        <!-- Auth Form -->
+        <div class="auth-form">
+          <h2 class="auth-title">
+            {{ isLoginMode ? 'Welcome Back' : 'Create Account' }}
+          </h2>
+          <p class="auth-subtitle">
+            {{ isLoginMode ? 'Sign in to your SmartCare account' : 'Join SmartCare today' }}
+          </p>
+
+          <form @submit.prevent="handleSubmit" class="form">
+            <!-- First Name field (signup only) -->
+            <div v-if="!isLoginMode" class="form-group">
+              <label for="firstName">First Name</label>
+              <input
+                id="firstName"
+                v-model="formData.firstName"
+                type="text"
+                required
+                placeholder="Enter your first name"
+                :disabled="isLoading"
+                maxlength="50"
+              />
+            </div>
+
+            <!-- Last Name field (signup only) -->
+            <div v-if="!isLoginMode" class="form-group">
+              <label for="lastName">Last Name</label>
+              <input
+                id="lastName"
+                v-model="formData.lastName"
+                type="text"
+                required
+                placeholder="Enter your last name"
+                :disabled="isLoading"
+                maxlength="50"
+              />
+            </div>
+
+            <!-- Email field -->
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input
+                id="email"
+                v-model="formData.email"
+                type="email"
+                required
+                placeholder="Enter your email"
+                :disabled="isLoading"
+                minlength="3"
+                maxlength="50"
+              />
+            </div>
+
+            <!-- Password field -->
+            <div class="form-group">
+              <label for="password">Password</label>
+              <input
+                id="password"
+                v-model="formData.password"
+                type="password"
+                required
+                :placeholder="isLoginMode ? 'Enter your password' : 'Create a password (6-100 characters)'"
+                :minlength="isLoginMode ? 1 : 6"
+                :maxlength="100"
+                :disabled="isLoading"
+              />
+            </div>
+
+            <!-- Confirm Password field (signup only) -->
+            <div v-if="!isLoginMode" class="form-group">
+              <label for="confirmPassword">Confirm Password</label>
+              <input
+                id="confirmPassword"
+                v-model="formData.confirmPassword"
+                type="password"
+                required
+                placeholder="Confirm your password"
+                :disabled="isLoading"
+                minlength="6"
+                maxlength="100"
+              />
+            </div>
+
+            <!-- Phone field (signup only) -->
+            <div v-if="!isLoginMode" class="form-group">
+              <label for="phone">Phone Number (Optional)</label>
+              <input
+                id="phone"
+                v-model="formData.phone"
+                type="tel"
+                placeholder="Enter your phone number"
+                :disabled="isLoading"
+              />
+            </div>
+
+            <!-- Error message -->
+            <div v-if="errorMessage" class="error-message">
+              {{ errorMessage }}
+            </div>
+
+            <!-- Success message -->
+            <div v-if="successMessage" class="success-message">
+              {{ successMessage }}
+            </div>
+
+            <!-- Submit button -->
+            <button 
+              type="submit" 
+              class="submit-btn"
+              :disabled="isLoading"
+            >
+              <span v-if="isLoading">
+                {{ isLoginMode ? 'Signing in...' : 'Creating Account...' }}
+              </span>
+              <span v-else>
+                {{ isLoginMode ? 'Sign In' : 'Create Account' }}
+              </span>
+            </button>
+          </form>
+        </div>
       </div>
 
-      <!-- Demo Users as Tiles Below -->
-      <div class="demo-section">
+      <!-- Demo Users Section (login mode only) -->
+      <div v-if="isLoginMode" class="demo-section">
         <div class="divider">
           <span>Or try demo accounts</span>
         </div>
@@ -53,11 +183,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import BrandSection from '../components/common/BrandSection.vue'
-import LoginForm from '../components/common/LoginForm.vue'
 import DemoUserCard from '../components/common/DemoUserCard.vue'
 
 const router = useRouter()
@@ -65,83 +194,198 @@ const authStore = useAuthStore()
 
 // Reactive state
 const isLoading = ref(false)
-const loginError = ref('')
-const email = ref('')
-const password = ref('')
-const loginFormRef = ref(null)
+const errorMessage = ref('')
+const successMessage = ref('')
+const isLoginMode = ref(true)
+
+// Form data
+const formData = reactive({
+  firstName: '',
+  lastName: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+  phone: ''
+})
 
 // Demo users data
 const demoUsers = [
   {
     id: 1,
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@email.com',
-    password: 'demo123',
-    role: 'Working Professional',
-    description: 'Manages hypertension, active lifestyle',
+    name: 'Demo User',
+    email: 'demo@smartcare.com',
+    password: 'demo',
+    role: 'Demo Account',
+    description: 'Explore all SmartCare features',
     avatar: '/api/placeholder/80/80',
-    stats: { appointments: 5, medications: 3 }
+    stats: { appointments: 3, medications: 2 }
   },
   {
     id: 2,
-    name: 'Michael Chen',
-    email: 'michael.chen@email.com',
-    password: 'demo123',
-    role: 'Diabetes Patient',
-    description: 'Type 2 diabetes management, regular monitoring',
+    name: 'Test User',
+    email: 'testuser',
+    password: 'test123',
+    role: 'Test Account',
+    description: 'Alternative demo account for testing',
     avatar: '/api/placeholder/80/80',
-    stats: { appointments: 8, medications: 5 }
-  },
-  {
-    id: 3,
-    name: 'Emma Davis',
-    email: 'emma.davis@email.com',
-    password: 'demo123',
-    role: 'Young Adult',
-    description: 'Preventive care, fitness tracking',
-    avatar: '/api/placeholder/80/80',
-    stats: { appointments: 3, medications: 1 }
-  },
-  {
-    id: 4,
-    name: 'Robert Williams',
-    email: 'robert.williams@email.com',
-    password: 'demo123',
-    role: 'Senior Patient',
-    description: 'Multiple conditions, complex medication routine',
-    avatar: '/api/placeholder/80/80',
-    stats: { appointments: 12, medications: 8 }
+    stats: { appointments: 2, medications: 1 }
   }
 ]
 
 // Methods
-const handleLogin = async (credentials) => {
-  console.log('Login attempt:', credentials)
-  
-  if (!credentials.email || !credentials.password) {
-    loginError.value = 'Please enter both email and password'
+const setMode = (mode) => {
+  isLoginMode.value = mode === 'login'
+  errorMessage.value = ''
+  successMessage.value = ''
+  // Clear form when switching modes
+  Object.keys(formData).forEach(key => {
+    formData[key] = ''
+  })
+}
+
+const validateForm = () => {
+  if (!formData.email || !formData.password) {
+    errorMessage.value = 'Please fill in all required fields'
+    return false
+  }
+
+  if (!isLoginMode.value) {
+    // First name validation
+    if (!formData.firstName || formData.firstName.trim().length === 0) {
+      errorMessage.value = 'Please enter your first name'
+      return false
+    }
+    if (formData.firstName.length > 50) {
+      errorMessage.value = 'First name must be 50 characters or less'
+      return false
+    }
+
+    // Last name validation
+    if (!formData.lastName || formData.lastName.trim().length === 0) {
+      errorMessage.value = 'Please enter your last name'
+      return false
+    }
+    if (formData.lastName.length > 50) {
+      errorMessage.value = 'Last name must be 50 characters or less'
+      return false
+    }
+
+    // Email validation (which will be used as username)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email)) {
+      errorMessage.value = 'Please enter a valid email address'
+      return false
+    }
+    if (formData.email.length < 3) {
+      errorMessage.value = 'Email must be at least 3 characters long'
+      return false
+    }
+    if (formData.email.length > 50) {
+      errorMessage.value = 'Email must be 50 characters or less'
+      return false
+    }
+
+    // Password validation
+    if (formData.password.length < 6) {
+      errorMessage.value = 'Password must be at least 6 characters long'
+      return false
+    }
+    if (formData.password.length > 100) {
+      errorMessage.value = 'Password must be 100 characters or less'
+      return false
+    }
+
+    // Confirm password validation
+    if (formData.password !== formData.confirmPassword) {
+      errorMessage.value = 'Passwords do not match'
+      return false
+    }
+  } else {
+    // Login mode - basic validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email)) {
+      errorMessage.value = 'Please enter a valid email address'
+      return false
+    }
+  }
+
+  return true
+}
+
+const handleSubmit = async () => {
+  if (!validateForm()) {
     return
   }
 
   isLoading.value = true
-  loginError.value = ''
+  errorMessage.value = ''
+  successMessage.value = ''
 
   try {
-    console.log('Calling authStore.login...')
-    const success = await authStore.login(credentials.email, credentials.password)
-    console.log('Login result:', success)
+    if (isLoginMode.value) {
+      await handleLogin()
+    } else {
+      await handleSignup()
+    }
+  } catch (error) {
+    console.error('Auth error:', error)
+    errorMessage.value = 'An unexpected error occurred. Please try again.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const handleLogin = async () => {
+  console.log('Login attempt:', formData.email)
+  
+  try {
+    const result = await authStore.login({
+      usernameOrEmail: formData.email, // Backend expects usernameOrEmail field
+      password: formData.password
+    })
     
-    if (success) {
+    console.log('Login result:', result)
+    
+    if (result.success) {
       console.log('Login successful, redirecting to dashboard...')
       await router.push({ name: 'dashboard' })
     } else {
-      loginError.value = 'Invalid email or password. Use one of the demo accounts or password "demo123".'
+      errorMessage.value = result.error || 'Invalid email or password. Use demo@smartcare.com / demo or testuser / test123.'
     }
   } catch (error) {
     console.error('Login error:', error)
-    loginError.value = 'Login failed. Please try again.'
-  } finally {
-    isLoading.value = false
+    errorMessage.value = 'Login failed. Please try again.'
+  }
+}
+
+const handleSignup = async () => {
+  console.log('Signup attempt:', formData.email)
+  
+  try {
+    const userData = {
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      email: formData.email.trim(),
+      username: formData.email.trim(), // Backend expects username field with same value as email
+      password: formData.password,
+      phone: formData.phone?.trim() || undefined
+    }
+
+    const result = await authStore.register(userData)
+    
+    console.log('Signup result:', result)
+    
+    if (result.success) {
+      successMessage.value = 'Account created successfully! Redirecting to dashboard...'
+      setTimeout(async () => {
+        await router.push({ name: 'dashboard' })
+      }, 2000)
+    } else {
+      errorMessage.value = result.error || 'Registration failed. Please try again.'
+    }
+  } catch (error) {
+    console.error('Signup error:', error)
+    errorMessage.value = 'Registration failed. Please try again.'
   }
 }
 
@@ -149,35 +393,39 @@ const loginAsDemoUser = async (user) => {
   console.log('Demo login attempt:', user.email)
   
   isLoading.value = true
-  loginError.value = ''
+  errorMessage.value = ''
   
   // Fill the form with demo user credentials
-  email.value = user.email
-  password.value = user.password
-  
-  // Update the form component
-  if (loginFormRef.value) {
-    loginFormRef.value.setCredentials(user.email, user.password)
-  }
+  formData.email = user.email
+  formData.password = user.password
   
   try {
     console.log('Calling authStore.login for demo user...')
-    const success = await authStore.login(user.email, user.password)
-    console.log('Demo login result:', success)
+    const result = await authStore.login({
+      usernameOrEmail: user.email,
+      password: user.password
+    })
+    console.log('Demo login result:', result)
     
-    if (success) {
+    if (result.success) {
       console.log('Demo login successful, redirecting to dashboard...')
       await router.push({ name: 'dashboard' })
     } else {
-      loginError.value = 'Demo login failed. Please try again.'
+      errorMessage.value = result.error || 'Demo login failed. Please try again.'
     }
   } catch (error) {
     console.error('Demo login error:', error)
-    loginError.value = 'Demo login failed. Please try again.'
+    errorMessage.value = 'Demo login failed. Please try again.'
   } finally {
     isLoading.value = false
   }
 }
+
+// Clear messages when switching modes
+watch(isLoginMode, () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+})
 </script>
 
 <style scoped>
@@ -213,8 +461,294 @@ const loginAsDemoUser = async (user) => {
   width: 200px;
   height: 200px;
   top: 10%;
-  left: 10%;
-  animation-delay: -2s;
+  left: -100px;
+  animation-delay: 0s;
+}
+
+.shape-2 {
+  width: 300px;
+  height: 300px;
+  top: 50%;
+  right: -150px;
+  animation-delay: 2s;
+}
+
+.shape-3 {
+  width: 150px;
+  height: 150px;
+  bottom: 20%;
+  left: 20%;
+  animation-delay: 4s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-30px) rotate(120deg);
+  }
+  66% {
+    transform: translateY(20px) rotate(240deg);
+  }
+}
+
+.login-container {
+  max-width: 500px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.brand-header {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.auth-form-container {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.auth-mode-toggle {
+  display: flex;
+  margin-bottom: 2rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.mode-toggle-btn {
+  flex: 1;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #6c757d;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.mode-toggle-btn.active {
+  background: white;
+  color: #495057;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.auth-form {
+  text-align: center;
+}
+
+.auth-title {
+  font-size: 2rem;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.auth-subtitle {
+  color: #6c757d;
+  margin-bottom: 2rem;
+  font-size: 1.1rem;
+}
+
+.form {
+  text-align: left;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-group input:disabled {
+  background: #f8f9fa;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid #f5c6cb;
+  font-size: 0.9rem;
+}
+
+.success-message {
+  background: #d4edda;
+  color: #155724;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid #c3e6cb;
+  font-size: 0.9rem;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 1rem;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+}
+
+.submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.demo-section {
+  margin-top: 2rem;
+}
+
+.divider {
+  position: relative;
+  text-align: center;
+  margin: 2rem 0;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.divider span {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  color: #2c3e50;
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
+}
+
+.demo-users {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  text-align: center;
+}
+
+.demo-users h3 {
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.demo-description {
+  color: #6c757d;
+  margin-bottom: 1.5rem;
+  font-size: 1rem;
+}
+
+.demo-user-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .login-page {
+    padding: 1rem;
+  }
+
+  .login-container {
+    max-width: 100%;
+  }
+
+  .auth-form-container,
+  .demo-users {
+    padding: 1.5rem;
+  }
+
+  .auth-title {
+    font-size: 1.75rem;
+  }
+
+  .demo-user-tiles {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-form-container,
+  .demo-users {
+    padding: 1rem;
+  }
+
+  .auth-title {
+    font-size: 1.5rem;
+  }
+
+  .mode-toggle-btn {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+
+  .shape-1 {
+    width: 200px;
+    height: 200px;
+    top: 10%;
+    left: 10%;
+    animation-delay: -2s;
+  }
 }
 
 .shape-2 {

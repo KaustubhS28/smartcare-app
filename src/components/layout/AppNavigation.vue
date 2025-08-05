@@ -13,6 +13,12 @@ const navigationItems = [
     description: 'Overview & Health Summary'
   },
   {
+    name: 'My Profile',
+    routeName: 'profile',
+    icon: 'user',
+    description: 'Personal & Health Information'
+  },
+  {
     name: 'Find Doctors',
     routeName: 'doctors',
     icon: 'doctors',
@@ -89,6 +95,10 @@ const toggleSidebar = () => {
                 <rect x="14" y="3" width="7" height="5" stroke="currentColor" stroke-width="2"/>
                 <rect x="14" y="12" width="7" height="9" stroke="currentColor" stroke-width="2"/>
                 <rect x="3" y="16" width="7" height="5" stroke="currentColor" stroke-width="2"/>
+              </svg>
+              <svg v-else-if="item.icon === 'user'" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2"/>
+                <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
               </svg>
               <svg v-else-if="item.icon === 'doctors'" width="20" height="20" viewBox="0 0 24 24" fill="none">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2"/>

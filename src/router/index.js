@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import Login from '../views/Login.vue'
 import Dashboard from '../views/Dashboard.vue'
+import Profile from '../views/Profile.vue'
 import Doctors from '../views/Doctors.vue'
 import DoctorDetail from '../views/DoctorDetail.vue'
 import Appointments from '../views/Appointments.vue'
@@ -31,6 +32,15 @@ const router = createRouter({
       meta: { 
         requiresAuth: true,
         title: 'Dashboard - SmartCare'
+      }
+    },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: Profile,
+      meta: { 
+        requiresAuth: true,
+        title: 'My Profile - SmartCare'
       }
     },
     {

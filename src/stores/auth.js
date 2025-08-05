@@ -1,25 +1,172 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { authApi } from '../services/auth.js'
 
 export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(false)
   const currentUser = ref(null)
   const isLoading = ref(false)
+  const error = ref(null)
 
-  // Demo user profiles with different healthcare data
+  // Initialize auth state from localStorage
+  const initializeAuth = () => {
+    const authData = localStorage.getItem('smartcare_auth')
+    if (authData) {
+      try {
+        const { user, accessToken, tokenType } = JSON.parse(authData)
+        if (accessToken && user) {
+          currentUser.value = user
+          isAuthenticated.value = true
+        }
+      } catch (error) {
+        console.warn('Failed to parse stored auth data:', error)
+        localStorage.removeItem('smartcare_auth')
+      }
+    }
+  }
+
+  // Login function with backend integration
+  const login = async (credentials) => {
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      const response = await authApi.signin(credentials)
+      
+      // Handle new response structure
+      if (response.success && response.data) {
+        const userData = {
+          id: response.data.userId,
+          username: response.data.username,
+          email: response.data.email,
+          profileCompleted: response.data.profileCompleted,
+          tourCompleted: response.data.tourCompleted
+        }
+        
+        currentUser.value = userData
+        isAuthenticated.value = true
+        
+        // Store auth data with new structure
+        localStorage.setItem('smartcare_auth', JSON.stringify({
+          user: userData,
+          accessToken: response.data.accessToken,
+          tokenType: response.data.tokenType
+        }))
+        
+        return { success: true }
+      } else {
+        // Handle failure response
+        const errorMessage = response.message || 'Login failed'
+        error.value = errorMessage
+        return { success: false, error: errorMessage }
+      }
+    } catch (err) {
+      console.warn('Backend login failed:', err)
+      error.value = err.message || 'Login failed'
+      
+      // Fallback to demo login for testing
+      if (credentials.usernameOrEmail && credentials.password) {
+        return await demoLogin(credentials.usernameOrEmail, credentials.password)
+      }
+      
+      return { success: false, error: error.value }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // Register function
+  const register = async (userData) => {
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      const response = await authApi.signup(userData)
+      
+      // Handle new response structure
+      if (response.success && response.data) {
+        const userInfo = {
+          id: response.data.userId,
+          username: response.data.username,
+          email: response.data.email,
+          profileCompleted: response.data.profileCompleted,
+          tourCompleted: response.data.tourCompleted
+        }
+        
+        currentUser.value = userInfo
+        isAuthenticated.value = true
+        
+        // Store auth data with new structure
+        localStorage.setItem('smartcare_auth', JSON.stringify({
+          user: userInfo,
+          accessToken: response.data.accessToken,
+          tokenType: response.data.tokenType
+        }))
+        
+        return { success: true }
+      } else {
+        // Handle failure response
+        const errorMessage = response.message || 'Registration failed'
+        error.value = errorMessage
+        return { success: false, error: errorMessage }
+      }
+    } catch (err) {
+      error.value = err.message || 'Registration failed'
+      return { success: false, error: error.value }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // Logout function
+  const logout = () => {
+    currentUser.value = null
+    isAuthenticated.value = false
+    error.value = null
+    localStorage.removeItem('smartcare_auth')
+  }
+
+  // Update profile function
+  const updateProfile = async (profileData) => {
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      const response = await authApi.updateProfile(profileData)
+      
+      if (response.user) {
+        currentUser.value = response.user
+        
+        // Update stored auth data
+        const authData = JSON.parse(localStorage.getItem('smartcare_auth') || '{}')
+        authData.user = response.user
+        localStorage.setItem('smartcare_auth', JSON.stringify(authData))
+        
+        return { success: true }
+      }
+    } catch (err) {
+      error.value = err.message || 'Profile update failed'
+      return { success: false, error: error.value }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // Demo user profiles for fallback/testing
   const userProfiles = {
-    'sarah.johnson@email.com': {
+    'demo@smartcare.com': {
       id: 1,
-      name: 'Sarah Johnson',
-      email: 'sarah.johnson@email.com',
+      name: 'Demo User',
+      email: 'demo@smartcare.com',
+      username: 'demo',
       avatar: '/api/placeholder/150/150',
       dateOfBirth: '1985-06-15',
       bloodType: 'O+',
       phone: '(555) 123-4567',
       address: '123 Main Street, Seattle, WA 98101',
       emergencyContact: {
-        name: 'John Johnson',
-        relationship: 'Spouse',
+        name: 'Emergency Contact',
+        relationship: 'Family',
         phone: '(555) 987-6543'
       },
       healthData: {
@@ -39,119 +186,98 @@ export const useAuthStore = defineStore('auth', () => {
         ]
       }
     },
-    'michael.chen@email.com': {
+    'testuser': {
       id: 2,
-      name: 'Michael Chen',
-      email: 'michael.chen@email.com',
+      name: 'Test User',
+      email: 'testuser@smartcare.com',
+      username: 'testuser',
       avatar: '/api/placeholder/150/150',
-      dateOfBirth: '1978-03-22',
+      dateOfBirth: '1990-03-15',
       bloodType: 'A+',
       phone: '(555) 234-5678',
-      address: '456 Oak Avenue, Portland, OR 97201',
+      address: '456 Test Street, Test City, TC 12345',
       emergencyContact: {
-        name: 'Lisa Chen',
-        relationship: 'Wife',
-        phone: '(555) 876-5432'
+        name: 'Test Contact',
+        relationship: 'Friend',
+        phone: '(555) 987-6543'
       },
       healthData: {
-        healthScore: 85,
+        healthScore: 88,
         vitals: {
-          bloodPressure: { systolic: 135, diastolic: 85, date: '2024-01-08' },
-          heartRate: { value: 78, date: '2024-01-08' },
+          bloodPressure: { systolic: 118, diastolic: 78, date: '2024-01-08' },
+          heartRate: { value: 68, date: '2024-01-08' },
           temperature: { value: 98.4, date: '2024-01-08' },
-          weight: { value: 180, date: '2024-01-07' },
-          height: { value: "5'10\"", date: '2023-12-01' }
-        },
-        conditions: ['Type 2 Diabetes', 'Prediabetes'],
-        allergies: ['Shellfish'],
-        medications: [
-          { name: 'Metformin', dosage: '500mg', frequency: 'Twice daily' },
-          { name: 'Lisinopril', dosage: '5mg', frequency: 'Once daily' },
-          { name: 'Atorvastatin', dosage: '20mg', frequency: 'Once daily' }
-        ]
-      }
-    },
-    'emma.davis@email.com': {
-      id: 3,
-      name: 'Emma Davis',
-      email: 'emma.davis@email.com',
-      avatar: '/api/placeholder/150/150',
-      dateOfBirth: '1995-11-08',
-      bloodType: 'B-',
-      phone: '(555) 345-6789',
-      address: '789 Pine Street, San Francisco, CA 94102',
-      emergencyContact: {
-        name: 'David Davis',
-        relationship: 'Father',
-        phone: '(555) 765-4321'
-      },
-      healthData: {
-        healthScore: 96,
-        vitals: {
-          bloodPressure: { systolic: 110, diastolic: 70, date: '2024-01-08' },
-          heartRate: { value: 65, date: '2024-01-08' },
-          temperature: { value: 98.2, date: '2024-01-08' },
-          weight: { value: 140, date: '2024-01-07' },
-          height: { value: "5'6\"", date: '2023-12-01' }
+          weight: { value: 155, date: '2024-01-07' },
+          height: { value: "5'7\"", date: '2023-12-01' }
         },
         conditions: [],
-        allergies: ['Latex'],
+        allergies: ['Shellfish'],
         medications: [
-          { name: 'Birth Control', dosage: '0.15mg', frequency: 'Once daily' },
           { name: 'Multivitamin', dosage: '1 tablet', frequency: 'Once daily' }
-        ]
-      }
-    },
-    'robert.williams@email.com': {
-      id: 4,
-      name: 'Robert Williams',
-      email: 'robert.williams@email.com',
-      avatar: '/api/placeholder/150/150',
-      dateOfBirth: '1952-07-14',
-      bloodType: 'AB+',
-      phone: '(555) 456-7890',
-      address: '321 Elm Drive, Phoenix, AZ 85001',
-      emergencyContact: {
-        name: 'Mary Williams',
-        relationship: 'Wife',
-        phone: '(555) 654-3210'
-      },
-      healthData: {
-        healthScore: 78,
-        vitals: {
-          bloodPressure: { systolic: 145, diastolic: 90, date: '2024-01-08' },
-          heartRate: { value: 82, date: '2024-01-08' },
-          temperature: { value: 98.8, date: '2024-01-08' },
-          weight: { value: 195, date: '2024-01-07' },
-          height: { value: "5'11\"", date: '2023-12-01' }
-        },
-        conditions: ['Hypertension', 'Type 2 Diabetes', 'High Cholesterol', 'Arthritis'],
-        allergies: ['Aspirin', 'Codeine'],
-        medications: [
-          { name: 'Metformin', dosage: '1000mg', frequency: 'Twice daily' },
-          { name: 'Lisinopril', dosage: '20mg', frequency: 'Once daily' },
-          { name: 'Atorvastatin', dosage: '40mg', frequency: 'Once daily' },
-          { name: 'Insulin', dosage: '15 units', frequency: 'Before meals' },
-          { name: 'Aspirin', dosage: '81mg', frequency: 'Once daily' },
-          { name: 'Vitamin B12', dosage: '1000mcg', frequency: 'Once daily' }
         ]
       }
     }
   }
 
+  // Demo login function (for testing without backend)
+  const demoLogin = async (usernameOrEmail, password) => {
+    isLoading.value = true
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    const userByEmail = userProfiles[usernameOrEmail]
+    const userByUsername = Object.values(userProfiles).find(user => user.username === usernameOrEmail)
+    const user = userByEmail || userByUsername
+    
+    if (user && (password === 'demo' || password === 'test123')) {
+      currentUser.value = user
+      isAuthenticated.value = true
+      
+      localStorage.setItem('smartcare_auth', JSON.stringify({
+        user: user,
+        accessToken: 'demo-access-token',
+        tokenType: 'Bearer'
+      }))
+      
+      isLoading.value = false
+      return { success: true }
+    } else {
+      isLoading.value = false
+      error.value = 'Invalid credentials'
+      return { success: false, error: 'Invalid credentials' }
+    }
+  }
+
   // Computed properties
   const user = computed(() => currentUser.value)
+  const isLoggedIn = computed(() => isAuthenticated.value)
+
   const userInitials = computed(() => {
-    if (!currentUser.value) return ''
-    return currentUser.value.name
-      .split(' ')
-      .map(name => name[0])
-      .join('')
-      .toUpperCase()
+    if (!currentUser.value) return 'U'
+    
+    // Try to get initials from name first, fallback to username/email
+    if (currentUser.value.name) {
+      return currentUser.value.name
+        .split(' ')
+        .map(name => name[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    } else if (currentUser.value.username) {
+      // For email-based usernames, get first 2 characters before @
+      const username = currentUser.value.username
+      if (username.includes('@')) {
+        return username.substring(0, 2).toUpperCase()
+      }
+      return username.substring(0, 2).toUpperCase()
+    }
+    
+    return 'U'
   })
 
   const age = computed(() => {
-    if (!currentUser.value) return 0
+    if (!currentUser.value || !currentUser.value.dateOfBirth) return 0
     const today = new Date()
     const birthDate = new Date(currentUser.value.dateOfBirth)
     let age = today.getFullYear() - birthDate.getFullYear()
@@ -164,118 +290,109 @@ export const useAuthStore = defineStore('auth', () => {
     return age
   })
 
-  // Actions
-  async function login(email, password) {
-    console.log('Auth store login called with:', { email, password })
-    
-    isLoading.value = true
-    
+  // Additional helper functions
+  const getHealthProfile = async () => {
     try {
-      // Simulate API call delay
-      console.log('Simulating API delay...')
-      await new Promise(resolve => setTimeout(resolve, 800))
-      
-      // Check if user exists and password is correct (demo: all passwords are 'demo123')
-      console.log('Checking user credentials...')
-      console.log('Available emails:', Object.keys(userProfiles))
-      
-      const userProfile = userProfiles[email]
-      console.log('Found user profile:', userProfile ? 'Yes' : 'No')
-      console.log('Password check:', password === 'demo123' ? 'Valid' : 'Invalid')
-      
-      if (userProfile && password === 'demo123') {
-        console.log('Login successful, setting user state...')
-        currentUser.value = userProfile
-        isAuthenticated.value = true
-        
-        // Store in localStorage for persistence
-        const authData = {
-          isAuthenticated: true,
-          user: userProfile
-        }
-        localStorage.setItem('smartcare_auth', JSON.stringify(authData))
-        console.log('Auth data stored in localStorage')
-        
-        return true
-      } else {
-        console.log('Login failed - invalid credentials')
-        return false
-      }
-    } catch (error) {
-      console.error('Login error:', error)
-      return false
+      isLoading.value = true
+      const response = await authApi.getHealthProfile()
+      return response
+    } catch (err) {
+      error.value = err.message || 'Failed to fetch health profile'
+      throw err
     } finally {
       isLoading.value = false
     }
   }
 
-  function logout() {
-    console.log('Logging out user...')
-    isAuthenticated.value = false
-    currentUser.value = null
-    localStorage.removeItem('smartcare_auth')
-    console.log('User logged out and localStorage cleared')
-  }
-
-  function checkAuthState() {
-    console.log('Checking auth state from localStorage...')
-    const authData = localStorage.getItem('smartcare_auth')
-    
-    if (authData) {
-      try {
-        const parsed = JSON.parse(authData)
-        console.log('Found auth data in localStorage:', parsed)
-        
-        if (parsed.isAuthenticated && parsed.user) {
-          isAuthenticated.value = true
-          currentUser.value = parsed.user
-          console.log('Auth state restored from localStorage')
-        }
-      } catch (error) {
-        console.error('Error parsing auth data:', error)
-        localStorage.removeItem('smartcare_auth')
-      }
-    } else {
-      console.log('No auth data found in localStorage')
+  const checkUsername = async (username) => {
+    try {
+      const response = await authApi.checkUsername(username)
+      return response.available
+    } catch (err) {
+      console.error('Failed to check username availability:', err)
+      return false
     }
   }
 
-  function updateProfile(userData) {
-    if (currentUser.value) {
-      currentUser.value = { ...currentUser.value, ...userData }
-      
-      // Update localStorage
-      const authData = {
-        isAuthenticated: true,
-        user: currentUser.value
-      }
-      localStorage.setItem('smartcare_auth', JSON.stringify(authData))
-      console.log('Profile updated and saved to localStorage')
+  const checkEmail = async (email) => {
+    try {
+      const response = await authApi.checkEmail(email)
+      return response.available
+    } catch (err) {
+      console.error('Failed to check email availability:', err)
+      return false
     }
   }
 
-  function updateHealthScore(newScore) {
+  const completeTour = async () => {
+    try {
+      await authApi.completeTour()
+      if (currentUser.value) {
+        currentUser.value.tourCompleted = true
+      }
+    } catch (err) {
+      console.error('Failed to complete tour:', err)
+    }
+  }
+
+  const updateHealthScore = (newScore) => {
     if (currentUser.value && currentUser.value.healthData) {
       currentUser.value.healthData.healthScore = newScore
-      updateProfile(currentUser.value)
-      console.log('Health score updated to:', newScore)
+      // Update localStorage for demo mode
+      const authData = JSON.parse(localStorage.getItem('smartcare_auth') || '{}')
+      if (authData.user) {
+        authData.user = currentUser.value
+        localStorage.setItem('smartcare_auth', JSON.stringify(authData))
+      }
     }
   }
 
+  // Token information
+  const accessToken = computed(() => {
+    const authData = localStorage.getItem('smartcare_auth')
+    if (authData) {
+      try {
+        const { accessToken } = JSON.parse(authData)
+        return accessToken
+      } catch {
+        return null
+      }
+    }
+    return null
+  })
+  
+  const isTokenValid = computed(() => {
+    return !!accessToken.value
+  })
+
+  // Backward compatibility alias
+  const checkAuthState = initializeAuth
+
   // Initialize auth state on store creation
-  checkAuthState()
+  initializeAuth()
 
   return {
+    // State
     isAuthenticated,
     currentUser,
     isLoading,
+    error,
+    
+    // Computed
     user,
+    isLoggedIn,
     userInitials,
     age,
+    accessToken,
+    isTokenValid,
+    
+    // Actions
     login,
+    register,
     logout,
-    checkAuthState,
     updateProfile,
-    updateHealthScore
+    initializeAuth,
+    checkAuthState, // Backward compatibility
+    demoLogin
   }
-}) 
+})
