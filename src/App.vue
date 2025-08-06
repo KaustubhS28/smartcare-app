@@ -3,6 +3,7 @@ import { RouterView } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppNavigation from './components/layout/AppNavigation.vue'
+import Walkme from './components/common/Walkme.vue'
 
 const authStore = useAuthStore()
 </script>
@@ -24,6 +25,7 @@ const authStore = useAuthStore()
     <template v-else>
       <RouterView />
     </template>
+    <Walkme />
   </div>
 </template>
 
