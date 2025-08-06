@@ -139,6 +139,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Store for registered users
+  const registeredUsers = ref([])
+
   // Computed properties
   const user = computed(() => currentUser.value)
   const userInitials = computed(() => {
@@ -262,6 +265,12 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function registerUser(userData) {
+    registeredUsers.value.push(userData)
+    // Optionally persist to localStorage
+    localStorage.setItem('smartcare_registered_users', JSON.stringify(registeredUsers.value))
+  }
+
   // Initialize auth state on store creation
   checkAuthState()
 
@@ -276,6 +285,8 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     checkAuthState,
     updateProfile,
-    updateHealthScore
+    updateHealthScore,
+    registeredUsers,
+    registerUser
   }
-}) 
+})

@@ -32,6 +32,23 @@
         <input id="email" v-model="email" type="email" required placeholder="Enter your email" class="form-input" :class="{ error: errors.email }" @blur="checkEmailTaken" />
         <span v-if="errors.email" class="error-message">{{ errors.email }}</span>
       </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <div class="input-wrapper">
+          <input id="password" v-model="password" :type="showPassword ? 'text' : 'password'" required placeholder="Enter your password" class="form-input" :class="{ error: errors.password }" />
+          <button type="button" class="password-toggle" @click="showPassword = !showPassword">
+            <svg v-if="showPassword" width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" stroke-width="2"/>
+              <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/>
+              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </button>
+        </div>
+        <span v-if="errors.password" class="error-message">{{ errors.password }}</span>
+      </div>
       <button type="submit" class="register-btn">Register</button>
     </form>
   </div>
@@ -41,6 +58,10 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { emailUserNameCollection } from '../../data/emailUserNameCollection.js'
+import { useAuthStore } from '../../stores/auth.js'
+
+const router = useRouter()
+const authStore = useAuthStore()
 
 const name = ref('')
 const age = ref('')
@@ -49,8 +70,9 @@ const weight = ref('')
 const height = ref('')
 const username = ref('')
 const email = ref('')
+const password = ref('')
+const showPassword = ref(false)
 const errors = ref({})
-const router = useRouter()
 
 function checkEmailTaken() {
   if (email.value.trim() && emailUserNameCollection.some(u => u.email.toLowerCase() === email.value.trim().toLowerCase())) {
@@ -70,6 +92,14 @@ function checkUsernameTaken() {
 
 function validate() {
   const newErrors = {}
+  // Password: required, min 6 chars, at least one letter and one number
+  if (!password.value) {
+    newErrors.password = 'Password is required.'
+  } else if (password.value.length < 6) {
+    newErrors.password = 'Password must be at least 6 characters.'
+  } else if (!/(?=.*[A-Za-z])(?=.*\d)/.test(password.value)) {
+    newErrors.password = 'Password must contain letters and numbers.'
+  }
   // Username: required, alphanumeric, 3-16 chars
   if (!username.value.trim()) {
     newErrors.username = 'Username is required.'
@@ -85,6 +115,12 @@ function validate() {
     newErrors.email = 'Enter a valid email address.'
   } else if (emailUserNameCollection.some(u => u.email.toLowerCase() === email.value.trim().toLowerCase())) {
     newErrors.email = 'Email Already Taken'
+  }
+  // Password: required, min 6 chars
+  if (!password.value.trim()) {
+    newErrors.password = 'Password is required.'
+  } else if (password.value.length < 6) {
+    newErrors.password = 'Password must be at least 6 characters long.'
   }
   // Name: only letters and spaces
   if (!name.value.trim()) {
@@ -112,10 +148,23 @@ function validate() {
   return Object.keys(newErrors).length === 0
 }
 
-const handleRegister = () => {
+const handleRegister = async () => {
   if (!validate()) return
-  // Registration logic here (e.g., API call)
-  // For now, just redirect to login
+  // Prepare new user object
+  const newUser = {
+    name: name.value,
+    age: age.value,
+    contact: contact.value,
+    weight: weight.value,
+    height: height.value,
+    username: username.value,
+    email: email.value,
+    password: password.value
+  }
+  console.log('New User:', newUser);
+  // Push to auth store
+  await authStore.registerUser(newUser)
+  // Redirect to login
   router.push('/login')
 }
 </script>
@@ -153,6 +202,27 @@ const handleRegister = () => {
   transition: all 0.3s ease;
   background: var(--bg-primary);
   box-sizing: border-box;
+}
+.input-wrapper {
+  position: relative;
+}
+.password-toggle {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  z-index: 3;
+}
+.password-toggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
 }
 .register-btn {
   width: 100%;
