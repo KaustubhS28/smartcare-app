@@ -20,9 +20,8 @@
           :error-message="loginError"
           :is-loading="isLoading"
           @submit="handleLogin"
-          @update:email="email = $event"
-          @update:password="password = $event"
         />
+        <button class="register-btn" @click="goToRegister">Register Now</button>
       </div>
 
       <!-- Demo Users as Tiles Below -->
@@ -178,6 +177,10 @@ const loginAsDemoUser = async (user) => {
     isLoading.value = false
   }
 }
+
+const goToRegister = () => {
+  router.push({ name: 'register' })
+}
 </script>
 
 <style scoped>
@@ -272,6 +275,30 @@ const loginAsDemoUser = async (user) => {
   z-index: 3;
 }
 
+/* Register Button */
+.register-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.register-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+}
+
 /* Demo Section Styling */
 .demo-section {
   width: 100%;
@@ -356,6 +383,12 @@ const loginAsDemoUser = async (user) => {
     max-width: 100%;
   }
 
+  .register-btn {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
+  }
+
   .demo-section {
     padding: 2rem;
   }
@@ -382,6 +415,11 @@ const loginAsDemoUser = async (user) => {
   .login-form-container {
     padding: 1.5rem;
     border-radius: 16px;
+  }
+
+  .register-btn {
+    padding: 0.75rem;
+    font-size: 1rem;
   }
 
   .demo-section {
@@ -431,4 +469,4 @@ const loginAsDemoUser = async (user) => {
   transform: translateY(-8px) scale(1.02);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
-</style> 
+</style>

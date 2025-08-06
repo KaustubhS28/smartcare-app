@@ -8,6 +8,7 @@ import Appointments from '../views/Appointments.vue'
 import MedicalRecords from '../views/MedicalRecords.vue'
 import HealthTracking from '../views/HealthTracking.vue'
 import Medications from '../views/Medications.vue'
+import Register from '../components/common/Register.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -19,6 +20,15 @@ const router = createRouter({
       meta: { 
         requiresGuest: true,
         title: 'Login - SmartCare'
+      }
+    },
+    {
+      path: '/register',
+      name: 'register',
+      component: Register,
+      meta: {
+        requiresGuest: true,
+        title: 'Register - SmartCare'
       }
     },
     {
