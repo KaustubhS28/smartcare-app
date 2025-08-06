@@ -1,10 +1,15 @@
 // API Base Configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
 
+// Import TokenManager
+import TokenManager from './tokenManager.js'
+
 // API client with common configuration
 class ApiClient {
   constructor() {
     this.baseURL = API_BASE_URL
+    this.isRefreshing = false
+    this.failedQueue = []
   }
 
   async request(endpoint, options = {}) {
@@ -19,30 +24,110 @@ class ApiClient {
     }
 
     // Add authentication token if available
-    const authData = localStorage.getItem('smartcare_auth')
-    if (authData) {
-      try {
-        const { accessToken, tokenType } = JSON.parse(authData)
-        if (accessToken && tokenType) {
-          config.headers.Authorization = `${tokenType} ${accessToken}`
-        }
-      } catch (error) {
-        console.warn('Failed to parse auth data:', error)
-      }
+    const accessToken = TokenManager.getAccessToken()
+    const tokenType = TokenManager.getTokenType()
+    
+    if (accessToken && tokenType) {
+      config.headers.Authorization = `${tokenType} ${accessToken}`
     }
 
     try {
       const response = await fetch(url, config)
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorData = await response.json().catch(() => ({}))
+        const error = new Error(errorData.message || `HTTP error! status: ${response.status}`)
+        error.response = {
+          status: response.status,
+          data: errorData
+        }
+        throw error
       }
 
       const data = await response.json()
       return data
     } catch (error) {
+      // Handle token refresh for 401 errors
+      if (error.response?.status === 401 && !endpoint.includes('/auth/') && !this.isRefreshing) {
+        return this.handleTokenRefresh(endpoint, options)
+      }
+      
       console.error('API request failed:', error)
       throw error
+    }
+  }
+
+  async handleTokenRefresh(originalEndpoint, originalOptions) {
+    if (this.isRefreshing) {
+      // Wait for the ongoing refresh to complete
+      return new Promise((resolve, reject) => {
+        this.failedQueue.push({ resolve, reject, endpoint: originalEndpoint, options: originalOptions })
+      })
+    }
+
+    this.isRefreshing = true
+
+    try {
+      const refreshToken = TokenManager.getRefreshToken()
+      const tokenType = TokenManager.getTokenType()
+      
+      if (!refreshToken) {
+        throw new Error('No refresh token available')
+      }
+
+      const refreshResponse = await fetch(`${this.baseURL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `${tokenType} ${refreshToken}`
+        },
+        body: JSON.stringify({ refreshToken })
+      })
+
+      if (!refreshResponse.ok) {
+        throw new Error('Token refresh failed')
+      }
+
+      const refreshData = await refreshResponse.json()
+      
+      if (refreshData.success && refreshData.data) {
+        // Update stored tokens using TokenManager
+        TokenManager.updateTokens(
+          refreshData.data.accessToken,
+          refreshData.data.refreshToken,
+          refreshData.data.tokenType || 'Bearer',
+          refreshData.data.expiresIn || 3600
+        )
+
+        // Retry original request
+        const result = await this.request(originalEndpoint, originalOptions)
+        
+        // Process failed queue
+        this.failedQueue.forEach(({ resolve, endpoint, options }) => {
+          resolve(this.request(endpoint, options))
+        })
+        this.failedQueue = []
+        
+        return result
+      } else {
+        throw new Error('Invalid refresh response')
+      }
+    } catch (error) {
+      // Clear auth data and reject all queued requests
+      TokenManager.clearTokens()
+      this.failedQueue.forEach(({ reject }) => {
+        reject(error)
+      })
+      this.failedQueue = []
+      
+      // Redirect to login (if in browser context)
+      if (typeof window !== 'undefined' && window.location) {
+        window.location.href = '/login'
+      }
+      
+      throw error
+    } finally {
+      this.isRefreshing = false
     }
   }
 
@@ -116,29 +201,51 @@ export const doctorApi = {
     apiClient.get(`/doctors/${doctorId}/availability?date=${date}`)
 }
 
-// Appointment API endpoints
+// Appointment API endpoints (legacy - use appointment.js service instead)
 export const appointmentApi = {
-  // Appointment management
-  bookAppointment: (appointmentData) => apiClient.post('/appointments/book', appointmentData),
-  
-  getMyAppointments: (params = {}) => {
-    const queryParams = new URLSearchParams(params).toString()
-    return apiClient.get(`/appointments/my-appointments${queryParams ? `?${queryParams}` : ''}`)
+  // Backward compatibility methods - these delegate to the new appointment service
+  bookAppointment: (appointmentData) => {
+    // Import dynamically to avoid circular imports
+    return import('./appointment.js').then(module => 
+      module.appointmentApi.create(appointmentData)
+    )
   },
   
-  getUpcomingAppointments: () => apiClient.get('/appointments/upcoming'),
+  getMyAppointments: (params = {}) => {
+    return import('./appointment.js').then(module => 
+      module.appointmentApi.getAll(params)
+    )
+  },
   
-  getAvailableSlots: (doctorId, date) => 
-    apiClient.get(`/appointments/available-slots?doctorId=${doctorId}&date=${date}`),
+  getUpcomingAppointments: () => {
+    return import('./appointment.js').then(module => 
+      module.appointmentApi.getUpcoming()
+    )
+  },
   
-  updateAppointmentStatus: (appointmentId, status) =>
-    apiClient.put(`/appointments/${appointmentId}/status`, { status }),
+  getAvailableSlots: (doctorId, date) => {
+    return import('./appointment.js').then(module => 
+      module.appointmentApi.getAvailableSlots(doctorId, date)
+    )
+  },
   
-  cancelAppointment: (appointmentId) => 
-    apiClient.put(`/appointments/${appointmentId}/status`, { status: 'CANCELLED' }),
+  updateAppointmentStatus: (appointmentId, status) => {
+    return import('./appointment.js').then(module => 
+      module.appointmentApi.updateStatus(appointmentId, status)
+    )
+  },
   
-  rescheduleAppointment: (appointmentId, newDateTime) =>
-    apiClient.put(`/appointments/${appointmentId}/reschedule`, { newDateTime })
+  cancelAppointment: (appointmentId) => {
+    return import('./appointment.js').then(module => 
+      module.appointmentApi.cancel(appointmentId)
+    )
+  },
+  
+  rescheduleAppointment: (appointmentId, updateData) => {
+    return import('./appointment.js').then(module => 
+      module.appointmentApi.update(appointmentId, updateData)
+    )
+  }
 }
 
 // Medication API endpoints  

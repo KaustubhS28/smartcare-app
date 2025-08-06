@@ -1,13 +1,34 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { appointments } from '../data/doctors.js'
+import { ref, computed, onMounted } from 'vue'
+import { useAppointmentStore } from '../stores/appointments.js'
 
-const currentDate = new Date()
+const appointmentStore = useAppointmentStore()
+
 const selectedDate = ref(new Date())
-const viewMode = ref('upcoming') // 'upcoming', 'past', 'all'
+const viewMode = ref('upcoming') // 'upcoming', 'past', 'all', 'today'
+const isLoading = ref(false)
+const showCancelModal = ref(false)
+const selectedAppointment = ref(null)
 
-const formatDate = (date) => {
-  return new Date(date).toLocaleDateString('en-US', {
+// Load appointments when component mounts
+onMounted(async () => {
+  await loadAppointments()
+  await appointmentStore.getUpcoming()
+})
+
+const loadAppointments = async () => {
+  isLoading.value = true
+  try {
+    await appointmentStore.getAppointments()
+  } catch (error) {
+    console.error('Failed to load appointments:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const formatDate = (dateString) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -15,54 +36,110 @@ const formatDate = (date) => {
   })
 }
 
-const formatTime = (time) => {
-  return time
+const formatTime = (timeString) => {
+  // Convert 24-hour format to 12-hour format
+  const [hours, minutes] = timeString.split(':')
+  const hour12 = parseInt(hours) % 12 || 12
+  const ampm = parseInt(hours) >= 12 ? 'PM' : 'AM'
+  return `${hour12}:${minutes} ${ampm}`
 }
 
 const getStatusColor = (status) => {
-  switch (status) {
-    case 'confirmed': return 'success'
-    case 'pending': return 'warning'
-    case 'cancelled': return 'danger'
-    case 'completed': return 'info'
+  switch (status?.toUpperCase()) {
+    case 'SCHEDULED': return 'scheduled'
+    case 'CONFIRMED': return 'confirmed'
+    case 'IN_PROGRESS': return 'in-progress'
+    case 'COMPLETED': return 'completed'
+    case 'CANCELLED': return 'cancelled'
+    case 'NO_SHOW': return 'no-show'
     default: return 'secondary'
   }
 }
 
+const getStatusDisplayText = (status) => {
+  switch (status?.toUpperCase()) {
+    case 'SCHEDULED': return 'Scheduled'
+    case 'CONFIRMED': return 'Confirmed'
+    case 'IN_PROGRESS': return 'In Progress'
+    case 'COMPLETED': return 'Completed'
+    case 'CANCELLED': return 'Cancelled'
+    case 'NO_SHOW': return 'No Show'
+    default: return status
+  }
+}
+
 const filteredAppointments = computed(() => {
-  const now = new Date()
-  
   switch (viewMode.value) {
     case 'upcoming':
-      return appointments.filter(apt => new Date(apt.date) >= now)
+      return appointmentStore.futureAppointments
     case 'past':
-      return appointments.filter(apt => new Date(apt.date) < now)
+      return appointmentStore.pastAppointments
+    case 'today':
+      return appointmentStore.todayAppointments
     case 'all':
     default:
-      return appointments
+      return appointmentStore.appointments
   }
 })
 
-const upcomingCount = computed(() => {
-  const now = new Date()
-  return appointments.filter(apt => new Date(apt.date) >= now).length
-})
+const upcomingCount = computed(() => appointmentStore.futureAppointments.length)
+const completedCount = computed(() => appointmentStore.completedAppointments.length)
+const todayCount = computed(() => appointmentStore.todayAppointments.length)
 
-const completedCount = computed(() => {
-  const now = new Date()
-  return appointments.filter(apt => new Date(apt.date) < now).length
-})
-
-const cancelAppointment = (appointmentId) => {
-  // In a real app, this would make an API call
-  console.log('Cancelling appointment:', appointmentId)
-  alert('Appointment cancellation requested. You will receive a confirmation email.')
+const canCancelAppointment = (appointment) => {
+  return appointment.canCancel && ['SCHEDULED', 'CONFIRMED'].includes(appointment.status)
 }
 
-const rescheduleAppointment = (appointmentId) => {
-  // In a real app, this would open a rescheduling modal
-  console.log('Rescheduling appointment:', appointmentId)
-  alert('Rescheduling feature would open here.')
+const canRescheduleAppointment = (appointment) => {
+  return appointment.canReschedule && ['SCHEDULED', 'CONFIRMED'].includes(appointment.status)
+}
+
+const showCancelConfirmation = (appointment) => {
+  selectedAppointment.value = appointment
+  showCancelModal.value = true
+}
+
+const showRescheduleModal = (appointment) => {
+  selectedAppointment.value = appointment
+  manageMode.value = 'reschedule'
+  showManageModal.value = true
+}
+
+const showEditModal = (appointment) => {
+  selectedAppointment.value = appointment
+  manageMode.value = 'edit'
+  showManageModal.value = true
+}
+
+const openBookingModal = () => {
+  showBookingModal.value = true
+}
+
+const handleBookingSuccess = async (appointmentData) => {
+  console.log('Appointment booked successfully:', appointmentData)
+  await loadAppointments()
+  // Could show a success toast here
+}
+
+const handleManageSuccess = async (appointmentData) => {
+  console.log('Appointment updated successfully:', appointmentData)
+  await loadAppointments()
+  // Could show a success toast here
+}
+
+const handleCancelSuccess = async (result) => {
+  console.log('Appointment cancelled successfully:', result)
+  await loadAppointments()
+  // Could show a success toast here
+}
+
+const handleRescheduleFromCancel = (appointment) => {
+  showRescheduleModal(appointment)
+}
+
+const handleContactFromCancel = (appointment) => {
+  // Could open a contact modal or redirect to contact page
+  console.log('Contact doctor for appointment:', appointment.id)
 }
 </script>
 
@@ -75,6 +152,19 @@ const rescheduleAppointment = (appointmentId) => {
 
     <!-- Quick Stats -->
     <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon today">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+            <polyline points="12,6 12,12 16,14" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-number">{{ todayCount }}</span>
+          <span class="stat-label">Today</span>
+        </div>
+      </div>
+
       <div class="stat-card">
         <div class="stat-icon upcoming">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -114,7 +204,7 @@ const rescheduleAppointment = (appointmentId) => {
           </svg>
         </div>
         <div class="stat-info">
-          <span class="stat-number">{{ appointments.length }}</span>
+          <span class="stat-number">{{ appointmentStore.appointments.length }}</span>
           <span class="stat-label">Total</span>
         </div>
       </div>
@@ -138,6 +228,13 @@ const rescheduleAppointment = (appointmentId) => {
 
     <!-- Filter Tabs -->
     <div class="filter-tabs">
+      <button 
+        @click="viewMode = 'today'" 
+        :class="{ active: viewMode === 'today' }"
+        class="filter-tab"
+      >
+        Today
+      </button>
       <button 
         @click="viewMode = 'upcoming'" 
         :class="{ active: viewMode === 'upcoming' }"
@@ -243,7 +340,8 @@ const rescheduleAppointment = (appointmentId) => {
 
             <div class="appointment-actions" v-if="appointment.status !== 'completed' && appointment.status !== 'cancelled'">
               <button 
-                @click="rescheduleAppointment(appointment.id)"
+                v-if="canRescheduleAppointment(appointment)"
+                @click="showRescheduleModal(appointment)"
                 class="action-btn secondary"
                 title="Reschedule"
               >
@@ -254,7 +352,8 @@ const rescheduleAppointment = (appointmentId) => {
               </button>
               
               <button 
-                @click="cancelAppointment(appointment.id)"
+                v-if="canCancelAppointment(appointment)"
+                @click="showCancelConfirmation(appointment)"
                 class="action-btn danger"
                 title="Cancel"
               >
@@ -269,6 +368,40 @@ const rescheduleAppointment = (appointmentId) => {
         </div>
       </div>
     </div>
+
+    <!-- Book New Appointment Button -->
+    <div class="floating-action">
+      <button @click="openBookingModal" class="fab-btn" title="Book New Appointment">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2"/>
+          <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Modals -->
+    <AppointmentBookingModal
+      :is-visible="showBookingModal"
+      @close="showBookingModal = false"
+      @success="handleBookingSuccess"
+    />
+
+    <AppointmentManageModal
+      :is-visible="showManageModal"
+      :appointment="selectedAppointment"
+      :mode="manageMode"
+      @close="showManageModal = false"
+      @success="handleManageSuccess"
+    />
+
+    <AppointmentCancelModal
+      :is-visible="showCancelModal"
+      :appointment="selectedAppointment"
+      @close="showCancelModal = false"
+      @success="handleCancelSuccess"
+      @reschedule="handleRescheduleFromCancel"
+      @contact="handleContactFromCancel"
+    />
   </div>
 </template>
 
@@ -634,6 +767,50 @@ const rescheduleAppointment = (appointmentId) => {
 
 .book-first-btn:hover {
   background: var(--primary-dark);
+}
+
+.floating-action {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 999;
+}
+
+.fab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: all 0.3s ease;
+}
+
+.fab-btn:hover {
+  background: var(--primary-dark);
+  transform: scale(1.1);
+}
+
+.book-new {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.book-new:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.book-new .stat-icon {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 @media (max-width: 768px) {

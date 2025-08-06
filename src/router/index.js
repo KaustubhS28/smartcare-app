@@ -154,9 +154,12 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   
+  console.log('Router guard - checking route:', to.path, 'Auth state:', authStore.isAuthenticated)
+  
   // Ensure auth state is properly initialized
   if (!authStore.isAuthenticated) {
     authStore.checkAuthState()
+    console.log('Auth state after check:', authStore.isAuthenticated)
   }
   
   // Set document title
@@ -180,10 +183,12 @@ router.beforeEach(async (to, from, next) => {
   
   // If going to login and already authenticated, redirect to dashboard
   if (to.path === '/login' && authStore.isAuthenticated) {
+    console.log('User authenticated but going to login, redirecting to dashboard')
     next('/')
     return
   }
   
+  console.log('Router guard - allowing navigation to:', to.path)
   next()
 })
 

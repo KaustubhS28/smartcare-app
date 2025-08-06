@@ -5,36 +5,86 @@ import { profileApi } from '../services/profile.js'
 export const useProfileStore = defineStore('profile', () => {
   // State
   const profile = ref(null)
-  const healthProfile = ref(null)
+  const healthProfiles = ref([])
   const isLoading = ref(false)
   const error = ref(null)
+  const validationErrors = ref({})
+
+  // Helper function to handle API errors according to documentation
+  const handleProfileError = (error) => {
+    console.error('Profile API Error:', error)
+    
+    if (error.response?.status === 400) {
+      // Validation errors - extract field-specific messages
+      const validationErrors = error.response.data.data?.errors || []
+      const errorMap = validationErrors.reduce((acc, err) => {
+        acc[err.field] = err.message
+        return acc
+      }, {})
+      return { type: 'validation', errors: errorMap }
+    } else if (error.response?.status === 401) {
+      // Unauthorized - redirect to login (handled by component)
+      return { type: 'auth', message: 'Authentication required' }
+    } else if (error.response?.status === 403) {
+      // Forbidden - show access denied message
+      return { type: 'forbidden', message: 'Access denied' }
+    } else if (error.response?.status === 404) {
+      // Not found
+      return { type: 'notfound', message: 'Profile not found' }
+    } else {
+      // Generic error
+      return { type: 'generic', message: error.message || 'An unexpected error occurred' }
+    }
+  }
 
   // Actions
   const fetchProfile = async () => {
     try {
       isLoading.value = true
       error.value = null
+      validationErrors.value = {}
 
       const response = await profileApi.getProfile()
-      profile.value = response.user || response
+      
+      // Extract data from API response structure
+      if (response.data?.success && response.data?.data) {
+        profile.value = response.data.data
+      } else {
+        // Fallback for different response structures
+        profile.value = response.data
+      }
       
       return profile.value
     } catch (err) {
-      error.value = err.message || 'Failed to fetch profile'
-      console.error('Failed to fetch profile:', err)
-      
-      // Return fallback profile for demo
-      const demoProfile = {
-        id: 1,
-        name: 'Demo User',
-        email: 'demo@smartcare.com',
-        phone: '(555) 123-4567',
-        address: '123 Demo Street, Demo City, DC 12345',
-        dateOfBirth: '1990-01-01',
-        profilePictureUrl: '/api/placeholder/150/150'
+      const errorInfo = handleProfileError(err)
+      if (errorInfo.type === 'validation') {
+        validationErrors.value = errorInfo.errors
+      } else {
+        error.value = errorInfo.message
       }
-      profile.value = demoProfile
-      return demoProfile
+      
+      // Provide fallback profile for development/demo
+      if (process.env.NODE_ENV === 'development') {
+        const demoProfile = {
+          id: "550e8400-e29b-41d4-a716-446655440000",
+          username: "demo_user",
+          email: "demo@smartcare.com",
+          firstName: "Demo",
+          lastName: "User",
+          phoneNumber: "+1-555-123-4567",
+          address: "123 Demo Street, Demo City, DC 12345",
+          profilePictureUrl: null,
+          dateOfBirth: "1990-01-01T00:00:00.000Z",
+          gender: "MALE",
+          tourCompleted: false,
+          profileCompleted: true,
+          roles: ["USER"]
+        }
+        profile.value = demoProfile
+        return demoProfile
+      }
+      
+      throw err
     } finally {
       isLoading.value = false
     }
@@ -44,18 +94,52 @@ export const useProfileStore = defineStore('profile', () => {
     try {
       isLoading.value = true
       error.value = null
+      validationErrors.value = {}
 
       const response = await profileApi.updateProfile(userData)
-      profile.value = response.user || response
+      
+      // Extract data from API response structure
+      if (response.data?.success && response.data?.data) {
+        profile.value = response.data.data
+      } else {
+        profile.value = response.data
+      }
+      
+      return { success: true, data: profile.value }
+    } catch (err) {
+      const errorInfo = handleProfileError(err)
+      if (errorInfo.type === 'validation') {
+        validationErrors.value = errorInfo.errors
+        throw new Error('Validation failed')
+      } else {
+        error.value = errorInfo.message
+        throw err
+      }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const updateTourCompletion = async (tourCompleted = true) => {
+    try {
+      isLoading.value = true
+      error.value = null
+
+      const response = await profileApi.updateTourCompletion(tourCompleted)
+      
+      // Update local profile state
+      if (profile.value) {
+        profile.value.tourCompleted = tourCompleted
+      }
       
       return { success: true }
     } catch (err) {
-      error.value = err.message || 'Failed to update profile'
-      console.error('Failed to update profile:', err)
+      const errorInfo = handleProfileError(err)
+      error.value = errorInfo.message
       
-      // Update local profile for demo
+      // Update local state for demo purposes
       if (profile.value) {
-        profile.value = { ...profile.value, ...userData }
+        profile.value.tourCompleted = tourCompleted
       }
       
       return { success: true }
@@ -68,97 +152,113 @@ export const useProfileStore = defineStore('profile', () => {
     try {
       isLoading.value = true
       error.value = null
+      validationErrors.value = {}
 
       const response = await profileApi.getHealthProfile()
-      healthProfile.value = response.healthProfile || response
       
-      return healthProfile.value
-    } catch (err) {
-      error.value = err.message || 'Failed to fetch health profile'
-      console.error('Failed to fetch health profile:', err)
-      
-      // Return fallback health profile for demo
-      const demoHealthProfile = {
-        id: 1,
-        userId: 1,
-        height: 175, // cm
-        weight: 70, // kg
-        bloodType: 'O_POSITIVE',
-        medicalConditions: ['Hypertension'],
-        allergies: ['Penicillin', 'Peanuts'],
-        emergencyContactName: 'Emergency Contact',
-        emergencyContactPhone: '(555) 987-6543',
-        additionalNotes: 'No additional notes',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+      // Extract data from API response structure
+      if (response.data?.success && response.data?.data) {
+        healthProfiles.value = response.data.data
+      } else {
+        healthProfiles.value = response.data || []
       }
-      healthProfile.value = demoHealthProfile
-      return demoHealthProfile
+      
+      return healthProfiles.value
+    } catch (err) {
+      const errorInfo = handleProfileError(err)
+      error.value = errorInfo.message
+      
+      // Provide fallback health profile for development/demo
+      if (process.env.NODE_ENV === 'development') {
+        const demoHealthProfile = {
+          id: "550e8400-e29b-41d4-a716-446655440001",
+          bloodType: "A_POSITIVE",
+          height: 175.5,
+          weight: 70.2,
+          allergies: ["Penicillin", "Peanuts"],
+          medicalConditions: ["Asthma"],
+          emergencyContactName: "Jane Doe",
+          emergencyContactPhone: "+1-555-987-6543",
+          emergencyContactRelationship: "Spouse",
+          additionalNotes: "Regular exercise routine"
+        }
+        healthProfiles.value = [demoHealthProfile]
+        return healthProfiles.value
+      }
+      
+      healthProfiles.value = []
+      return []
     } finally {
       isLoading.value = false
     }
   }
 
-  const updateHealthProfile = async (healthData) => {
+  const createHealthProfile = async (healthData) => {
     try {
       isLoading.value = true
       error.value = null
+      validationErrors.value = {}
 
-      const response = await profileApi.updateHealthProfile(healthData)
-      healthProfile.value = response.healthProfile || response
+      const response = await profileApi.createHealthProfile(healthData)
       
-      return { success: true }
-    } catch (err) {
-      error.value = err.message || 'Failed to update health profile'
-      console.error('Failed to update health profile:', err)
-      
-      // Update local health profile for demo
-      if (healthProfile.value) {
-        healthProfile.value = { ...healthProfile.value, ...healthData }
+      // Extract data from API response structure
+      let newHealthProfile
+      if (response.data?.success && response.data?.data) {
+        newHealthProfile = response.data.data
+      } else {
+        newHealthProfile = response.data
       }
       
-      return { success: true }
+      // Add to local health profiles array
+      healthProfiles.value.push(newHealthProfile)
+      
+      return { success: true, data: newHealthProfile }
+    } catch (err) {
+      const errorInfo = handleProfileError(err)
+      if (errorInfo.type === 'validation') {
+        validationErrors.value = errorInfo.errors
+        throw new Error('Validation failed')
+      } else {
+        error.value = errorInfo.message
+        throw err
+      }
     } finally {
       isLoading.value = false
     }
   }
 
-  const completeTour = async () => {
-    try {
-      await profileApi.completeTour()
-      if (profile.value) {
-        profile.value.tourCompleted = true
-      }
-      return { success: true }
-    } catch (err) {
-      console.error('Failed to complete tour:', err)
-      // Update local profile for demo
-      if (profile.value) {
-        profile.value.tourCompleted = true
-      }
-      return { success: true }
-    }
-  }
-
-  const updateProfilePicture = async (profilePictureUrl) => {
+  const updateHealthProfile = async (healthProfileId, healthData) => {
     try {
       isLoading.value = true
       error.value = null
+      validationErrors.value = {}
 
-      const response = await profileApi.updateProfilePicture(profilePictureUrl)
-      profile.value = response.user || response
+      const response = await profileApi.updateHealthProfile(healthProfileId, healthData)
       
-      return { success: true }
-    } catch (err) {
-      error.value = err.message || 'Failed to update profile picture'
-      console.error('Failed to update profile picture:', err)
-      
-      // Update local profile for demo
-      if (profile.value) {
-        profile.value.profilePictureUrl = profilePictureUrl
+      // Extract data from API response structure
+      let updatedHealthProfile
+      if (response.data?.success && response.data?.data) {
+        updatedHealthProfile = response.data.data
+      } else {
+        updatedHealthProfile = response.data
       }
       
-      return { success: true }
+      // Update local health profiles array
+      const index = healthProfiles.value.findIndex(hp => hp.id === healthProfileId)
+      if (index !== -1) {
+        healthProfiles.value[index] = updatedHealthProfile
+      }
+      
+      return { success: true, data: updatedHealthProfile }
+    } catch (err) {
+      const errorInfo = handleProfileError(err)
+      if (errorInfo.type === 'validation') {
+        validationErrors.value = errorInfo.errors
+        throw new Error('Validation failed')
+      } else {
+        error.value = errorInfo.message
+        throw err
+      }
     } finally {
       isLoading.value = false
     }
@@ -166,20 +266,19 @@ export const useProfileStore = defineStore('profile', () => {
 
   // Computed properties
   const fullName = computed(() => {
-    return profile.value?.name || 'Unknown User'
+    if (!profile.value) return 'Unknown User'
+    return `${profile.value.firstName || ''} ${profile.value.lastName || ''}`.trim() || profile.value.username || 'Unknown User'
   })
 
   const initials = computed(() => {
-    if (!profile.value?.name) return 'U'
-    return profile.value.name
-      .split(' ')
-      .map(name => name[0])
-      .join('')
-      .toUpperCase()
+    if (!profile.value) return 'U'
+    const firstName = profile.value.firstName || ''
+    const lastName = profile.value.lastName || ''
+    return `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'U'
   })
 
   const age = computed(() => {
-    if (!profile.value?.dateOfBirth) return 0
+    if (!profile.value?.dateOfBirth) return null
     const today = new Date()
     const birthDate = new Date(profile.value.dateOfBirth)
     let age = today.getFullYear() - birthDate.getFullYear()
@@ -192,40 +291,65 @@ export const useProfileStore = defineStore('profile', () => {
     return age
   })
 
+  const primaryHealthProfile = computed(() => {
+    return healthProfiles.value[0] || null
+  })
+
   const bmi = computed(() => {
-    if (!healthProfile.value?.height || !healthProfile.value?.weight) return 0
-    const heightInMeters = healthProfile.value.height / 100
-    return (healthProfile.value.weight / (heightInMeters * heightInMeters)).toFixed(1)
+    const healthProfile = primaryHealthProfile.value
+    if (!healthProfile?.height || !healthProfile?.weight) return null
+    const heightInMeters = healthProfile.height / 100
+    return (healthProfile.weight / (heightInMeters * heightInMeters)).toFixed(1)
   })
 
   const bmiCategory = computed(() => {
     const bmiValue = parseFloat(bmi.value)
+    if (!bmiValue) return null
     if (bmiValue < 18.5) return 'Underweight'
     if (bmiValue < 25) return 'Normal weight'
     if (bmiValue < 30) return 'Overweight'
     return 'Obese'
   })
 
+  const isProfileComplete = computed(() => {
+    return profile.value?.profileCompleted || false
+  })
+
+  const isTourComplete = computed(() => {
+    return profile.value?.tourCompleted || false
+  })
+
+  // Clear errors
+  const clearErrors = () => {
+    error.value = null
+    validationErrors.value = {}
+  }
+
   return {
     // State
     profile,
-    healthProfile,
+    healthProfiles,
     isLoading,
     error,
+    validationErrors,
     
     // Computed
     fullName,
     initials,
     age,
+    primaryHealthProfile,
     bmi,
     bmiCategory,
+    isProfileComplete,
+    isTourComplete,
     
     // Actions
     fetchProfile,
     updateProfile,
+    updateTourCompletion,
     fetchHealthProfile,
+    createHealthProfile,
     updateHealthProfile,
-    completeTour,
-    updateProfilePicture
+    clearErrors
   }
 })

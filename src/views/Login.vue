@@ -54,7 +54,12 @@
                 placeholder="Enter your first name"
                 :disabled="isLoading"
                 maxlength="50"
+                pattern="[A-Za-z\s]+"
+                title="First name must contain only letters and spaces"
               />
+              <div v-if="validationErrors.firstName" class="field-error">
+                {{ validationErrors.firstName }}
+              </div>
             </div>
 
             <!-- Last Name field (signup only) -->
@@ -68,22 +73,50 @@
                 placeholder="Enter your last name"
                 :disabled="isLoading"
                 maxlength="50"
+                pattern="[A-Za-z\s]+"
+                title="Last name must contain only letters and spaces"
               />
+              <div v-if="validationErrors.lastName" class="field-error">
+                {{ validationErrors.lastName }}
+              </div>
+            </div>
+
+            <!-- Username field (signup only) -->
+            <div v-if="!isLoginMode" class="form-group">
+              <label for="username">Username</label>
+              <input
+                id="username"
+                v-model="formData.username"
+                type="text"
+                required
+                placeholder="Choose a username (3-20 characters)"
+                :disabled="isLoading"
+                minlength="3"
+                maxlength="20"
+                pattern="[a-zA-Z0-9_]+"
+                title="Username must be 3-20 characters (letters, numbers, underscore only)"
+              />
+              <div v-if="validationErrors.username" class="field-error">
+                {{ validationErrors.username }}
+              </div>
             </div>
 
             <!-- Email field -->
             <div class="form-group">
-              <label for="email">Email</label>
+              <label for="email">{{ isLoginMode ? 'Email or Username' : 'Email' }}</label>
               <input
                 id="email"
                 v-model="formData.email"
-                type="email"
+                :type="isLoginMode ? 'text' : 'email'"
                 required
-                placeholder="Enter your email"
+                :placeholder="isLoginMode ? 'Enter your email or username' : 'Enter your email address'"
                 :disabled="isLoading"
                 minlength="3"
                 maxlength="50"
               />
+              <div v-if="validationErrors.email" class="field-error">
+                {{ validationErrors.email }}
+              </div>
             </div>
 
             <!-- Password field -->
@@ -94,11 +127,21 @@
                 v-model="formData.password"
                 type="password"
                 required
-                :placeholder="isLoginMode ? 'Enter your password' : 'Create a password (6-100 characters)'"
-                :minlength="isLoginMode ? 1 : 6"
+                :placeholder="isLoginMode ? 'Enter your password' : 'Create a password (min 8 chars, 1 letter, 1 number)'"
+                :minlength="isLoginMode ? 1 : 8"
                 :maxlength="100"
                 :disabled="isLoading"
               />
+              <div v-if="validationErrors.password" class="field-error">
+                {{ validationErrors.password }}
+              </div>
+              <!-- Password strength indicator for signup -->
+              <div v-if="!isLoginMode && formData.password" class="password-strength">
+                <div class="strength-bar" :class="passwordStrength.class">
+                  <div class="strength-fill" :style="{ width: passwordStrength.percent + '%' }"></div>
+                </div>
+                <span class="strength-text">{{ passwordStrength.text }}</span>
+              </div>
             </div>
 
             <!-- Confirm Password field (signup only) -->
@@ -111,9 +154,12 @@
                 required
                 placeholder="Confirm your password"
                 :disabled="isLoading"
-                minlength="6"
+                minlength="8"
                 maxlength="100"
               />
+              <div v-if="validationErrors.confirmPassword" class="field-error">
+                {{ validationErrors.confirmPassword }}
+              </div>
             </div>
 
             <!-- Phone field (signup only) -->
@@ -125,7 +171,12 @@
                 type="tel"
                 placeholder="Enter your phone number"
                 :disabled="isLoading"
+                pattern="[\+]?[\d\s\-\(\)\.]+"
+                title="Please enter a valid phone number"
               />
+              <div v-if="validationErrors.phone" class="field-error">
+                {{ validationErrors.phone }}
+              </div>
             </div>
 
             <!-- Error message -->
@@ -183,7 +234,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import BrandSection from '../components/common/BrandSection.vue'
@@ -197,15 +248,63 @@ const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const isLoginMode = ref(true)
+const validationErrors = ref({})
 
 // Form data
 const formData = reactive({
   firstName: '',
   lastName: '',
+  username: '',
   email: '',
   password: '',
   confirmPassword: '',
   phone: ''
+})
+
+// Password strength computation
+const passwordStrength = computed(() => {
+  const password = formData.password
+  if (!password) return { percent: 0, text: '', class: '' }
+  
+  let score = 0
+  let feedback = []
+  
+  // Length check
+  if (password.length >= 8) score += 25
+  else feedback.push('at least 8 characters')
+  
+  // Letter check
+  if (/[A-Za-z]/.test(password)) score += 25
+  else feedback.push('at least one letter')
+  
+  // Number check
+  if (/\d/.test(password)) score += 25
+  else feedback.push('at least one number')
+  
+  // Special character check
+  if (/[@$!%*#?&]/.test(password)) score += 25
+  else feedback.push('special characters recommended')
+  
+  let text, className
+  if (score < 50) {
+    text = 'Weak'
+    className = 'weak'
+  } else if (score < 75) {
+    text = 'Fair'
+    className = 'fair'
+  } else if (score < 100) {
+    text = 'Good'
+    className = 'good'
+  } else {
+    text = 'Strong'
+    className = 'strong'
+  }
+  
+  if (feedback.length > 0) {
+    text += ` (needs: ${feedback.join(', ')})`
+  }
+  
+  return { percent: score, text, class: className }
 })
 
 // Demo users data
@@ -237,79 +336,89 @@ const setMode = (mode) => {
   isLoginMode.value = mode === 'login'
   errorMessage.value = ''
   successMessage.value = ''
+  validationErrors.value = {}
   // Clear form when switching modes
   Object.keys(formData).forEach(key => {
     formData[key] = ''
   })
 }
 
+// Validation according to API specification
 const validateForm = () => {
-  if (!formData.email || !formData.password) {
-    errorMessage.value = 'Please fill in all required fields'
-    return false
-  }
+  validationErrors.value = {}
+  const errors = {}
 
-  if (!isLoginMode.value) {
-    // First name validation
-    if (!formData.firstName || formData.firstName.trim().length === 0) {
-      errorMessage.value = 'Please enter your first name'
-      return false
+  if (isLoginMode.value) {
+    // Login validation
+    if (!formData.email) {
+      errors.email = 'Username or email is required'
     }
-    if (formData.firstName.length > 50) {
-      errorMessage.value = 'First name must be 50 characters or less'
-      return false
+    if (!formData.password) {
+      errors.password = 'Password is required'
     }
-
-    // Last name validation
-    if (!formData.lastName || formData.lastName.trim().length === 0) {
-      errorMessage.value = 'Please enter your last name'
-      return false
-    }
-    if (formData.lastName.length > 50) {
-      errorMessage.value = 'Last name must be 50 characters or less'
-      return false
+  } else {
+    // Registration validation according to API spec
+    
+    // First name validation (1-50 characters, letters only)
+    if (!formData.firstName?.trim()) {
+      errors.firstName = 'First name is required'
+    } else if (formData.firstName.length > 50) {
+      errors.firstName = 'First name must be 50 characters or less'
+    } else if (!/^[A-Za-z\s]+$/.test(formData.firstName)) {
+      errors.firstName = 'First name must contain only letters and spaces'
     }
 
-    // Email validation (which will be used as username)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) {
-      errorMessage.value = 'Please enter a valid email address'
-      return false
-    }
-    if (formData.email.length < 3) {
-      errorMessage.value = 'Email must be at least 3 characters long'
-      return false
-    }
-    if (formData.email.length > 50) {
-      errorMessage.value = 'Email must be 50 characters or less'
-      return false
+    // Last name validation (1-50 characters, letters only)
+    if (!formData.lastName?.trim()) {
+      errors.lastName = 'Last name is required'
+    } else if (formData.lastName.length > 50) {
+      errors.lastName = 'Last name must be 50 characters or less'
+    } else if (!/^[A-Za-z\s]+$/.test(formData.lastName)) {
+      errors.lastName = 'Last name must contain only letters and spaces'
     }
 
-    // Password validation
-    if (formData.password.length < 6) {
-      errorMessage.value = 'Password must be at least 6 characters long'
-      return false
+    // Username validation (3-20 characters, alphanumeric + underscore)
+    if (!formData.username?.trim()) {
+      errors.username = 'Username is required'
+    } else if (formData.username.length < 3) {
+      errors.username = 'Username must be at least 3 characters'
+    } else if (formData.username.length > 20) {
+      errors.username = 'Username must be 20 characters or less'
+    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+      errors.username = 'Username must contain only letters, numbers, and underscores'
     }
-    if (formData.password.length > 100) {
-      errorMessage.value = 'Password must be 100 characters or less'
-      return false
+
+    // Email validation
+    if (!formData.email?.trim()) {
+      errors.email = 'Email is required'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address'
+    }
+
+    // Password validation (min 8 chars, 1 letter, 1 number)
+    if (!formData.password) {
+      errors.password = 'Password is required'
+    } else if (formData.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters'
+    } else if (!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]+$/.test(formData.password)) {
+      errors.password = 'Password must contain at least one letter and one number'
     }
 
     // Confirm password validation
-    if (formData.password !== formData.confirmPassword) {
-      errorMessage.value = 'Passwords do not match'
-      return false
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password'
+    } else if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match'
     }
-  } else {
-    // Login mode - basic validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) {
-      errorMessage.value = 'Please enter a valid email address'
-      return false
+
+    // Phone validation (optional, but if provided must be valid format)
+    if (formData.phone?.trim() && !/^[\+]?[\d\s\-\(\)\.]+$/.test(formData.phone)) {
+      errors.phone = 'Please enter a valid phone number'
     }
   }
 
-  return true
+  validationErrors.value = errors
+  return Object.keys(errors).length === 0
 }
 
 const handleSubmit = async () => {
@@ -365,22 +474,46 @@ const handleSignup = async () => {
     const userData = {
       firstName: formData.firstName.trim(),
       lastName: formData.lastName.trim(),
+      username: formData.username.trim(),
       email: formData.email.trim(),
-      username: formData.email.trim(), // Backend expects username field with same value as email
       password: formData.password,
-      phone: formData.phone?.trim() || undefined
+      ...(formData.phone?.trim() && { phoneNumber: formData.phone.trim() })
     }
 
+    console.log('Calling authStore.register with:', userData)
     const result = await authStore.register(userData)
     
     console.log('Signup result:', result)
     
     if (result.success) {
-      successMessage.value = 'Account created successfully! Redirecting to dashboard...'
-      setTimeout(async () => {
-        await router.push({ name: 'dashboard' })
+      // Registration successful - switch to login mode and show success message
+      successMessage.value = result.message || 'Account created successfully! Please log in with your credentials.'
+      
+      // Pre-fill login form with username or email for login
+      formData.email = userData.username // Use username for login
+      formData.password = '' // Clear password for security
+      
+      // Clear other fields
+      formData.firstName = ''
+      formData.lastName = ''
+      formData.username = ''
+      formData.confirmPassword = ''
+      formData.phone = ''
+      validationErrors.value = {}
+      
+      // Switch to login mode after a short delay
+      setTimeout(() => {
+        setMode('login')
+        successMessage.value = 'Please log in with your new account'
       }, 2000)
+      
+    } else if (result.validationErrors) {
+      // Handle validation errors from backend
+      console.error('Signup validation errors:', result.validationErrors)
+      validationErrors.value = result.validationErrors
+      errorMessage.value = 'Please correct the errors below'
     } else {
+      console.error('Signup failed:', result.error)
       errorMessage.value = result.error || 'Registration failed. Please try again.'
     }
   } catch (error) {
@@ -596,6 +729,79 @@ watch(isLoginMode, () => {
 .form-group input:disabled {
   background: #f8f9fa;
   cursor: not-allowed;
+}
+
+/* Form field validation styles */
+.field-error {
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.form-group input:invalid {
+  border-color: #dc3545;
+}
+
+.form-group input:invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+/* Password strength indicator */
+.password-strength {
+  margin-top: 0.5rem;
+}
+
+.strength-bar {
+  height: 4px;
+  background-color: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+}
+
+.strength-fill {
+  height: 100%;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  border-radius: 2px;
+}
+
+.strength-bar.weak .strength-fill {
+  background-color: #dc3545;
+}
+
+.strength-bar.fair .strength-fill {
+  background-color: #fd7e14;
+}
+
+.strength-bar.good .strength-fill {
+  background-color: #20c997;
+}
+
+.strength-bar.strong .strength-fill {
+  background-color: #198754;
+}
+
+.strength-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #6b7280);
+  display: block;
+}
+
+/* Enhanced form validation feedback */
+.form-group {
+  position: relative;
+}
+
+.form-group input.has-error {
+  border-color: #dc3545;
+  background-color: #fff5f5;
+}
+
+.form-group input.has-success {
+  border-color: #198754;
+  background-color: #f0f9ff;
 }
 
 .error-message {
@@ -965,4 +1171,4 @@ watch(isLoginMode, () => {
   transform: translateY(-8px) scale(1.02);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
-</style> 
+</style>

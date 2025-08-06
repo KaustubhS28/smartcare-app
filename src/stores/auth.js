@@ -1,6 +1,49 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { authApi } from '../services/auth.js'
+import TokenManager from '../services/tokenManager.js'
+
+// Error handling utility
+const handleAuthError = (error) => {
+  console.error('Auth error:', error)
+  
+  if (error.response?.status === 400) {
+    // Validation errors
+    const validationErrors = error.response.data.data?.errors || []
+    return {
+      type: 'validation',
+      validationErrors: validationErrors.reduce((acc, err) => {
+        acc[err.field] = err.message
+        return acc
+      }, {}),
+      message: 'Validation failed'
+    }
+  } else if (error.response?.status === 401) {
+    // Invalid credentials
+    return {
+      type: 'auth',
+      message: error.response.data?.message || 'Invalid username or password'
+    }
+  } else if (error.response?.status === 403) {
+    // Account locked
+    return {
+      type: 'forbidden',
+      message: error.response.data?.message || 'Account is temporarily locked'
+    }
+  } else if (error.response?.status === 409) {
+    // Conflict (username/email exists)
+    return {
+      type: 'conflict',
+      message: error.response.data?.message || 'Username or email already exists'
+    }
+  } else {
+    // Generic error
+    return {
+      type: 'generic',
+      message: error.response?.data?.message || error.message || 'An unexpected error occurred'
+    }
+  }
+}
 
 export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(false)
@@ -10,18 +53,17 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Initialize auth state from localStorage
   const initializeAuth = () => {
-    const authData = localStorage.getItem('smartcare_auth')
-    if (authData) {
-      try {
-        const { user, accessToken, tokenType } = JSON.parse(authData)
-        if (accessToken && user) {
-          currentUser.value = user
-          isAuthenticated.value = true
-        }
-      } catch (error) {
-        console.warn('Failed to parse stored auth data:', error)
-        localStorage.removeItem('smartcare_auth')
-      }
+    const userData = TokenManager.getUserData()
+    const accessToken = TokenManager.getAccessToken()
+    
+    if (userData && accessToken && !TokenManager.isTokenExpired()) {
+      currentUser.value = userData
+      isAuthenticated.value = true
+      console.log('Auth state initialized from storage:', userData.username)
+    } else if (accessToken) {
+      // Token exists but is expired, clear it
+      TokenManager.clearTokens()
+      console.log('Expired token cleared')
     }
   }
 
@@ -31,40 +73,51 @@ export const useAuthStore = defineStore('auth', () => {
       isLoading.value = true
       error.value = null
       
-      const response = await authApi.signin(credentials)
+      console.log('Auth store login called with:', credentials.username || credentials.usernameOrEmail)
+      const response = await authApi.login(credentials)
+      console.log('Backend login response:', response)
       
-      // Handle new response structure
-      if (response.success && response.data) {
+      // Handle API response structure from documentation
+      if (response?.success && response?.data) {
+        const responseData = response.data
+        
         const userData = {
-          id: response.data.userId,
-          username: response.data.username,
-          email: response.data.email,
-          profileCompleted: response.data.profileCompleted,
-          tourCompleted: response.data.tourCompleted
+          id: responseData.userId,
+          username: responseData.email,
+          email: responseData.email,
+          firstName: responseData.firstName,
+          lastName: responseData.lastName,
+          roles: responseData.roles || ['USER']
         }
         
         currentUser.value = userData
         isAuthenticated.value = true
         
-        // Store auth data with new structure
-        localStorage.setItem('smartcare_auth', JSON.stringify({
-          user: userData,
-          accessToken: response.data.accessToken,
-          tokenType: response.data.tokenType
-        }))
+        // Store auth data with tokens using TokenManager
+        TokenManager.setTokens(
+          responseData.accessToken,
+          responseData.refreshToken,
+          userData,
+          responseData.tokenType || 'Bearer',
+          responseData.expiresIn || 3600
+        )
         
+        console.log('Login successful, auth state set for user:', userData.username)
         return { success: true }
       } else {
         // Handle failure response
-        const errorMessage = response.message || 'Login failed'
+        const errorMessage = response.data?.message || 'Login failed'
         error.value = errorMessage
+        console.error('Login failed:', errorMessage)
         return { success: false, error: errorMessage }
       }
     } catch (err) {
-      console.warn('Backend login failed:', err)
-      error.value = err.message || 'Login failed'
+      const errorInfo = handleAuthError(err)
+      error.value = errorInfo.message
       
-      // Fallback to demo login for testing
+      console.warn('Backend login failed:', errorInfo)
+      
+      // Fallback to demo login for testing if specific credentials
       if (credentials.usernameOrEmail && credentials.password) {
         return await demoLogin(credentials.usernameOrEmail, credentials.password)
       }
@@ -81,37 +134,62 @@ export const useAuthStore = defineStore('auth', () => {
       isLoading.value = true
       error.value = null
       
+      console.log('Auth store register called with:', userData.username)
       const response = await authApi.signup(userData)
+      console.log('Backend signup response:', response)
       
-      // Handle new response structure
-      if (response.success && response.data) {
-        const userInfo = {
-          id: response.data.userId,
-          username: response.data.username,
-          email: response.data.email,
-          profileCompleted: response.data.profileCompleted,
-          tourCompleted: response.data.tourCompleted
+      // Handle API response structure from documentation
+      if (response?.success && response?.message) {
+        // Registration successful but doesn't automatically log in
+        console.log('Registration successful:', response.message)
+        return { 
+          success: true, 
+          data: response.message,
+          message: response.message || 'User registered successfully'
         }
-        
-        currentUser.value = userInfo
-        isAuthenticated.value = true
-        
-        // Store auth data with new structure
-        localStorage.setItem('smartcare_auth', JSON.stringify({
-          user: userInfo,
-          accessToken: response.data.accessToken,
-          tokenType: response.data.tokenType
-        }))
-        
-        return { success: true }
       } else {
         // Handle failure response
-        const errorMessage = response.message || 'Registration failed'
+        const errorMessage = response.data?.message || 'Registration failed'
         error.value = errorMessage
+        console.error('Registration failed:', errorMessage)
         return { success: false, error: errorMessage }
       }
     } catch (err) {
-      error.value = err.message || 'Registration failed'
+      const errorInfo = handleAuthError(err)
+      error.value = errorInfo.message
+      
+      console.error('Registration error:', errorInfo)
+      
+      // Return validation errors if available
+      if (errorInfo.type === 'validation') {
+        return { 
+          success: false, 
+          validationErrors: errorInfo.validationErrors,
+          error: errorInfo.message
+        }
+      }
+      
+      // Return other error types
+      if (errorInfo.type === 'conflict') {
+        return { success: false, error: errorInfo.message }
+      }
+      
+      // Fallback for development/testing
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Using fallback demo registration')
+        return { 
+          success: true, 
+          data: {
+            userId: Date.now(),
+            username: userData.username,
+            email: userData.email,
+            firstName: userData.firstName,
+            lastName: userData.lastName
+          },
+          message: 'Demo registration successful'
+        }
+      }
+      
       return { success: false, error: error.value }
     } finally {
       isLoading.value = false
@@ -119,11 +197,56 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // Logout function
-  const logout = () => {
-    currentUser.value = null
-    isAuthenticated.value = false
-    error.value = null
-    localStorage.removeItem('smartcare_auth')
+  const logout = async () => {
+    try {
+      // Get refresh token from storage
+      const refreshToken = TokenManager.getRefreshToken()
+      if (refreshToken) {
+        await authApi.logout({ refreshToken })
+      }
+    } catch (error) {
+      console.error('Logout API error:', error)
+      // Continue with local logout even if API fails
+    } finally {
+      // Clear local auth state
+      currentUser.value = null
+      isAuthenticated.value = false
+      error.value = null
+      TokenManager.clearTokens()
+      console.log('User logged out successfully')
+    }
+  }
+
+  // Refresh token function
+  const refreshToken = async () => {
+    try {
+      const storedRefreshToken = TokenManager.getRefreshToken()
+      if (!storedRefreshToken) {
+        throw new Error('No refresh token available')
+      }
+
+      const response = await authApi.refresh({ refreshToken: storedRefreshToken })
+      
+      if (response.data?.success && response.data?.data) {
+        // Update tokens using TokenManager
+        TokenManager.updateTokens(
+          response.data.data.accessToken,
+          response.data.data.refreshToken,
+          response.data.data.tokenType || 'Bearer',
+          response.data.data.expiresIn || 3600
+        )
+        
+        console.log('Token refreshed successfully')
+        return response.data.data.accessToken
+      } else {
+        throw new Error('Failed to refresh token')
+      }
+    } catch (error) {
+      console.error('Token refresh failed:', error)
+      // Clear auth state on refresh failure
+      await logout()
+      throw error
+    }
   }
 
   // Update profile function
@@ -390,6 +513,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     logout,
+    refreshToken,
     updateProfile,
     initializeAuth,
     checkAuthState, // Backward compatibility

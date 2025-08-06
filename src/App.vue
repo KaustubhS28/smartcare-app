@@ -1,10 +1,16 @@
 <script setup>
+import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppNavigation from './components/layout/AppNavigation.vue'
 
 const authStore = useAuthStore()
+
+// Initialize auth state on app mount
+onMounted(() => {
+  authStore.initializeAuth()
+})
 </script>
 
 <template>

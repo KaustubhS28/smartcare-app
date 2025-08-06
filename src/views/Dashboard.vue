@@ -30,11 +30,24 @@ const upcomingAppointments = computed(() => {
 })
 
 const currentVitals = computed(() => {
-  return profileStore.healthProfile?.vitals || {
-    bloodPressure: { systolic: 120, diastolic: 80 },
-    heartRate: { value: 72 },
-    temperature: { value: 98.6 },
-    weight: { value: 150 }
+  const healthProfile = profileStore.primaryHealthProfile
+  
+  // Return demo vitals if no health profile exists
+  if (!healthProfile) {
+    return {
+      bloodPressure: { systolic: 120, diastolic: 80 },
+      heartRate: { value: 72 },
+      temperature: { value: 98.6 },
+      weight: { value: healthProfile?.weight || 150 }
+    }
+  }
+  
+  // Use actual health profile data
+  return {
+    bloodPressure: { systolic: 120, diastolic: 80 }, // These would come from vitals tracking
+    heartRate: { value: 72 }, // These would come from vitals tracking
+    temperature: { value: 98.6 }, // These would come from vitals tracking
+    weight: { value: healthProfile.weight || 150 }
   }
 })
 

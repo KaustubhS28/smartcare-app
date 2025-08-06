@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { doctors } from '../data/doctors.js'
+import AppointmentBookingModal from '../components/appointments/AppointmentBookingModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -9,8 +10,6 @@ const route = useRoute()
 const doctorId = parseInt(route.params.id)
 const doctor = computed(() => doctors.find(d => d.id === doctorId))
 
-const selectedDay = ref('')
-const selectedTime = ref('')
 const showBookingModal = ref(false)
 
 const generateStars = (rating) => {
@@ -25,14 +24,12 @@ const generateStars = (rating) => {
   }
 }
 
-const bookAppointment = () => {
-  if (!selectedDay.value || !selectedTime.value) {
-    alert('Please select a day and time for your appointment.')
-    return
-  }
-  
-  // In a real app, this would make an API call
-  alert(`Appointment booked with ${doctor.value.name} on ${selectedDay.value} at ${selectedTime.value}!`)
+const openBookingModal = () => {
+  showBookingModal.value = true
+}
+
+const handleBookingSuccess = (appointmentData) => {
+  console.log('Appointment booked successfully:', appointmentData)
   showBookingModal.value = false
   router.push({ name: 'appointments' })
 }
@@ -173,7 +170,7 @@ const goBack = () => {
 
     <!-- Book Appointment Button -->
     <div class="booking-section">
-      <button @click="showBookingModal = true" class="book-appointment-btn">
+      <button @click="openBookingModal" class="book-appointment-btn">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
           <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
@@ -184,55 +181,21 @@ const goBack = () => {
       </button>
     </div>
 
-    <!-- Booking Modal -->
-    <div v-if="showBookingModal" class="modal-overlay" @click="showBookingModal = false">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>Book Appointment</h3>
-          <button @click="showBookingModal = false" class="close-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2"/>
-              <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2"/>
-            </svg>
-          </button>
-        </div>
-        
-        <div class="modal-body">
-          <p>Book an appointment with {{ doctor.name }}</p>
-          
-          <div class="form-group">
-            <label>Select Day</label>
-            <select v-model="selectedDay" class="form-select">
-              <option value="">Choose a day...</option>
-              <option v-for="schedule in doctor.availability" :key="schedule.day" :value="schedule.day">
-                {{ schedule.day }}
-              </option>
-            </select>
-          </div>
-
-          <div v-if="selectedDay" class="form-group">
-            <label>Select Time</label>
-            <select v-model="selectedTime" class="form-select">
-              <option value="">Choose a time...</option>
-              <option v-for="slot in doctor.availability.find(s => s.day === selectedDay)?.slots" :key="slot" :value="slot">
-                {{ slot }}
-              </option>
-            </select>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button @click="showBookingModal = false" class="btn secondary">Cancel</button>
-          <button @click="bookAppointment" class="btn primary">Book Appointment</button>
-        </div>
-      </div>
-    </div>
+    <!-- Appointment Booking Modal -->
+    <AppointmentBookingModal
+      :is-visible="showBookingModal"
+      :doctor="doctor"
+      @close="showBookingModal = false"
+      @success="handleBookingSuccess"
+    />
   </div>
 
   <div v-else class="error-page">
     <h1>Doctor Not Found</h1>
     <p>The doctor you're looking for doesn't exist.</p>
-    <router-link :to="{ name: 'doctors' }" class="back-link">Back to Doctors</router-link>
+    <button @click="goBack" class="back-btn">
+      Back to Doctors
+    </button>
   </div>
 </template>
 
@@ -485,6 +448,28 @@ const goBack = () => {
   background: var(--primary-dark);
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
+}
+
+.error-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4rem 2rem;
+  min-height: 60vh;
+}
+
+.error-page h1 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.error-page p {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
 }
 
 /* Modal */
